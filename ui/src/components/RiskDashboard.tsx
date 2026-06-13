@@ -1,4 +1,4 @@
-import { ShieldAlert, ShieldCheck, AlertCircle, Skull } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, AlertCircle, Skull, Activity } from 'lucide-react';
 
 const RiskDashboard = ({ result }: { result: any }) => {
   if (!result) {
@@ -110,4 +110,3 @@ const RiskDashboard = ({ result }: { result: any }) => {
 };
 
 export default RiskDashboard;
-import { Activity } from 'lucide-react';

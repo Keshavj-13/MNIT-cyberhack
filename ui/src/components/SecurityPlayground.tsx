@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Send, Play, Zap, ShieldAlert, Ghost, UserCheck } from 'lucide-react';
+import { Send, Play, Zap, ShieldAlert, Ghost, UserCheck, Terminal } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080";
 
