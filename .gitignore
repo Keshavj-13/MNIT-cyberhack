@@ -1,0 +1,51 @@
+# Datasets
+data/raw/
+data/intermediate/
+data/processed/
+*.parquet
+*.csv
+
+# Models
+models/*.joblib
+models/*.pt
+models/*.pkl
+*.joblib
+*.pkl
+
+# Databases
+security_platform.db
+*.db
+*.sqlite
+
+# Environments & Secrets
+.env
+.env.*
+env/
+venv/
+bank_threat_env/
+.venv/
+conda-meta/
+
+# Reports
+reports/research/raw/
+reports/models/raw/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+build/
+.vite/
+
+# Caches
+catboost_info/
+.ipynb_checkpoints/
+
+# System
+.DS_Store
+Thumbs.db
