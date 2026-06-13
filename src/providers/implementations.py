@@ -30,8 +30,9 @@ class TransactionRiskProvider(RiskProvider):
         return RiskResult(
             provider_name="TransactionRisk (v2-Temporal)",
             risk_score=score,
-            confidence=0.98, # High confidence in non-leaking model
+            confidence=0.98,
             severity="HIGH" if score > 0.8 else "LOW",
+            event_category="MONETIZE" if score > 0.5 else "NEUTRAL",
             explanations=expl,
             raw_features=data
         )
@@ -62,6 +63,7 @@ class PhishingRiskProvider(RiskProvider):
             risk_score=score,
             confidence=0.95,
             severity="CRITICAL" if score > 0.9 else "LOW",
+            event_category="HOOK" if score > 0.5 else "NEUTRAL",
             explanations=expl,
             raw_features=data
         )
@@ -94,6 +96,7 @@ class SocialEngineeringRiskProvider(RiskProvider):
             risk_score=score,
             confidence=0.92,
             severity="HIGH" if score > 0.7 else "LOW",
+            event_category="LURE" if score > 0.5 else "NEUTRAL",
             explanations=expl,
             raw_features=data
         )
@@ -113,8 +116,9 @@ class AccountTakeoverProvider(RiskProvider):
         return RiskResult(
             provider_name="AccountTakeover (Rule-Based)",
             risk_score=score,
-            confidence=1.0, # Deterministic rules have high confidence
+            confidence=1.0,
             severity="CRITICAL" if score > 0.9 else "LOW",
+            event_category="EXPLOIT" if score > 0.5 else "NEUTRAL",
             explanations=expl,
             raw_features=data
         )
@@ -139,6 +143,7 @@ class DeviceTrustProvider(RiskProvider):
             risk_score=min(1.0, score),
             confidence=1.0,
             severity="HIGH" if score > 0.6 else "LOW",
+            event_category="EXPLOIT" if score > 0.5 else "NEUTRAL",
             explanations=expl,
             raw_features=data
         )

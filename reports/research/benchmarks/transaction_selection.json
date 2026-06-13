@@ -1,0 +1,27 @@
+[
+    {
+        "selector": "variance",
+        "feature_count": 11,
+        "duration": 0.0015621185302734375
+    },
+    {
+        "selector": "mutual_info",
+        "feature_count": 5,
+        "duration": 0.2828335762023926
+    },
+    {
+        "selector": "l1",
+        "feature_count": 10,
+        "duration": 0.19048094749450684
+    },
+    {
+        "selector": "rf_importance",
+        "feature_count": 6,
+        "duration": 0.6539335250854492
+    },
+    {
+        "selector": "boruta",
+        "feature_count": 0,
+        "duration": 4.1906960010528564
+    }
+]

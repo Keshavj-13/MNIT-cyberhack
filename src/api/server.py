@@ -63,15 +63,50 @@ def get_db():
 def health():
     return {"status": "healthy", "providers": [p.__class__.__name__ for p in ProviderRegistry.get_providers()]}
 
+from src.engine.session_models import SessionEvent
+
 @app.post("/evaluate", response_model=EngineResult)
 def evaluate(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
+    user_id = payload.get("user_id", "ANONYMOUS")
+    session_id = payload.get("session_id", "DEFAULT")
+    
+    # 1. Fetch History
+    past_events_db = db.query(SecurityEvent).filter(
+        SecurityEvent.user_id == user_id
+    ).order_by(SecurityEvent.timestamp.desc()).limit(10).all()
+    
+    history = [
+        SessionEvent(
+            user_id=e.user_id,
+            session_id=e.session_id,
+            event_category=e.event_category,
+            timestamp=e.timestamp,
+            risk_score=e.overall_risk,
+            confidence=e.confidence,
+            explanations=[e.why_decision],
+            input_payload=e.input_payload
+        ) for e in past_events_db
+    ][::-1] # Chronological
+    
+    # 2. Evaluate
     registry = ProviderRegistry()
     engine = RiskEngine(registry.get_providers())
+    result = engine.evaluate_all(payload, history)
     
-    result = engine.evaluate_all(payload)
-    
-    # Persist Event
+    # 3. Determine Dominant Category for this event
+    # Find the provider with the highest score that isn't neutral
+    dominant_cat = "NEUTRAL"
+    max_sub_score = 0.5
+    for res in result.provider_breakdown.values():
+        if res.risk_score > max_sub_score:
+            max_sub_score = res.risk_score
+            dominant_cat = res.event_category
+            
+    # 4. Persist
     db_event = SecurityEvent(
+        user_id=user_id,
+        session_id=session_id,
+        event_category=dominant_cat,
         input_payload=payload,
         overall_risk=result.overall_risk,
         decision=result.decision,
@@ -82,11 +117,6 @@ def evaluate(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db))
         why_decision=result.why_decision
     )
     db.add(db_event)
-    
-    # Audit log
-    log = AuditLog(action="EVALUATION", details=f"Decision: {result.decision}, Risk: {result.overall_risk}")
-    db.add(log)
-    
     db.commit()
     return result
 

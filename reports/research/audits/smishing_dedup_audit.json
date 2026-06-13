@@ -1,0 +1,9 @@
+{
+    "model": "LR_Deduplicated",
+    "initial_rows": 5572,
+    "deduplicated_rows": 5169,
+    "roc_auc": 0.9915802287540261,
+    "f1": 0.8230088495575221,
+    "train_time": 0.05818891525268555,
+    "improved_platform": true
+}

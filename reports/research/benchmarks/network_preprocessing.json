@@ -1,0 +1,218 @@
+[
+    {
+        "imputer": "mean",
+        "scaler": "none",
+        "roc_auc": 0.5108715543000181,
+        "duration": 0.43590307235717773
+    },
+    {
+        "imputer": "mean",
+        "scaler": "standard",
+        "roc_auc": 0.5104349474511298,
+        "duration": 0.4294888973236084
+    },
+    {
+        "imputer": "mean",
+        "scaler": "minmax",
+        "roc_auc": 0.5108398602328053,
+        "duration": 0.43248772621154785
+    },
+    {
+        "imputer": "mean",
+        "scaler": "robust",
+        "roc_auc": 0.5103111605464591,
+        "duration": 0.47066426277160645
+    },
+    {
+        "imputer": "mean",
+        "scaler": "quantile",
+        "roc_auc": 0.51040901287333,
+        "duration": 0.5159735679626465
+    },
+    {
+        "imputer": "mean",
+        "scaler": "power",
+        "roc_auc": 0.510502682926557,
+        "duration": 0.43697047233581543
+    },
+    {
+        "imputer": "median",
+        "scaler": "none",
+        "roc_auc": 0.5043265498885561,
+        "duration": 0.4064595699310303
+    },
+    {
+        "imputer": "median",
+        "scaler": "standard",
+        "roc_auc": 0.5044922258969505,
+        "duration": 0.4102764129638672
+    },
+    {
+        "imputer": "median",
+        "scaler": "minmax",
+        "roc_auc": 0.5039227403921426,
+        "duration": 0.44842004776000977
+    },
+    {
+        "imputer": "median",
+        "scaler": "robust",
+        "roc_auc": 0.5041026632450825,
+        "duration": 0.44631028175354004
+    },
+    {
+        "imputer": "median",
+        "scaler": "quantile",
+        "roc_auc": 0.5059152384063199,
+        "duration": 0.4501054286956787
+    },
+    {
+        "imputer": "median",
+        "scaler": "power",
+        "roc_auc": 0.5051221059176904,
+        "duration": 0.48377346992492676
+    },
+    {
+        "imputer": "most_frequent",
+        "scaler": "none",
+        "roc_auc": 0.4974277550772155,
+        "duration": 0.4648878574371338
+    },
+    {
+        "imputer": "most_frequent",
+        "scaler": "standard",
+        "roc_auc": 0.4979901591356426,
+        "duration": 0.45093750953674316
+    },
+    {
+        "imputer": "most_frequent",
+        "scaler": "minmax",
+        "roc_auc": 0.4970160549640223,
+        "duration": 0.48387837409973145
+    },
+    {
+        "imputer": "most_frequent",
+        "scaler": "robust",
+        "roc_auc": 0.49828815364869933,
+        "duration": 0.45889878273010254
+    },
+    {
+        "imputer": "most_frequent",
+        "scaler": "quantile",
+        "roc_auc": 0.4979554632249303,
+        "duration": 0.48038625717163086
+    },
+    {
+        "imputer": "most_frequent",
+        "scaler": "power",
+        "roc_auc": 0.4977964040918989,
+        "duration": 0.5044465065002441
+    },
+    {
+        "imputer": "constant",
+        "scaler": "none",
+        "roc_auc": 0.4944275886280565,
+        "duration": 0.44579029083251953
+    },
+    {
+        "imputer": "constant",
+        "scaler": "standard",
+        "roc_auc": 0.4945250109856582,
+        "duration": 0.4324333667755127
+    },
+    {
+        "imputer": "constant",
+        "scaler": "minmax",
+        "roc_auc": 0.4943904618026964,
+        "duration": 0.5042445659637451
+    },
+    {
+        "imputer": "constant",
+        "scaler": "robust",
+        "roc_auc": 0.4945095474074949,
+        "duration": 0.5031163692474365
+    },
+    {
+        "imputer": "constant",
+        "scaler": "quantile",
+        "roc_auc": 0.495378505941059,
+        "duration": 0.5386271476745605
+    },
+    {
+        "imputer": "constant",
+        "scaler": "power",
+        "roc_auc": 0.49356474978243553,
+        "duration": 0.5440175533294678
+    },
+    {
+        "imputer": "iterative",
+        "scaler": "none",
+        "roc_auc": 0.5043657051705214,
+        "duration": 0.4749739170074463
+    },
+    {
+        "imputer": "iterative",
+        "scaler": "standard",
+        "roc_auc": 0.5034186921826904,
+        "duration": 0.47281932830810547
+    },
+    {
+        "imputer": "iterative",
+        "scaler": "minmax",
+        "roc_auc": 0.5033892974300326,
+        "duration": 0.4415767192840576
+    },
+    {
+        "imputer": "iterative",
+        "scaler": "robust",
+        "roc_auc": 0.5039473405336555,
+        "duration": 0.4304027557373047
+    },
+    {
+        "imputer": "iterative",
+        "scaler": "quantile",
+        "roc_auc": 0.5037857804316163,
+        "duration": 0.45938777923583984
+    },
+    {
+        "imputer": "iterative",
+        "scaler": "power",
+        "roc_auc": 0.5038466982280901,
+        "duration": 0.48196840286254883
+    },
+    {
+        "imputer": "knn",
+        "scaler": "none",
+        "roc_auc": 0.5172966616673152,
+        "duration": 0.830181360244751
+    },
+    {
+        "imputer": "knn",
+        "scaler": "standard",
+        "roc_auc": 0.5180887291595029,
+        "duration": 0.8120200634002686
+    },
+    {
+        "imputer": "knn",
+        "scaler": "minmax",
+        "roc_auc": 0.517981087373994,
+        "duration": 0.8097567558288574
+    },
+    {
+        "imputer": "knn",
+        "scaler": "robust",
+        "roc_auc": 0.5177370477645623,
+        "duration": 0.8768930435180664
+    },
+    {
+        "imputer": "knn",
+        "scaler": "quantile",
+        "roc_auc": 0.5205613828757403,
+        "duration": 0.8378007411956787
+    },
+    {
+        "imputer": "knn",
+        "scaler": "power",
+        "roc_auc": 0.5197140563910754,
+        "duration": 0.8709211349487305
+    }
+]

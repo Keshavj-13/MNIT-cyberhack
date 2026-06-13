@@ -7,6 +7,7 @@ class RiskResult(BaseModel):
     risk_score: float  # 0.0 to 1.0
     confidence: float # 0.0 to 1.0
     severity: str     # LOW, MEDIUM, HIGH, CRITICAL
+    event_category: str = "NEUTRAL" # LURE, HOOK, EXPLOIT, MONETIZE, NEUTRAL
     explanations: List[str]
     raw_features: Dict[str, Any]
 

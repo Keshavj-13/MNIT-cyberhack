@@ -1,0 +1,12 @@
+{
+    "provider": "Phishing",
+    "dataset": "PhishingWebsites",
+    "model": "LightGBM",
+    "accuracy": 0.9719583898688376,
+    "precision": 0.9741735537190083,
+    "recall": 0.9622448979591837,
+    "f1": 0.9681724845995893,
+    "roc_auc": 0.9956630580745702,
+    "pr_auc": 0.9956212755714835,
+    "train_time": 0.096803
+}

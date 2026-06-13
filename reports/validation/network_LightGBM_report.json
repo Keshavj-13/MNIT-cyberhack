@@ -1,0 +1,60 @@
+{
+    "metrics": {
+        "model": "LightGBM",
+        "roc_auc_cv": 0.47400000882303955,
+        "roc_auc_std": 0.009203569749041376,
+        "f1_cv": 0.02297877362354264,
+        "pr_auc": 0.18613778776252754,
+        "accuracy": 0.797,
+        "precision": 0.2,
+        "recall": 0.01015228426395939,
+        "status": "UNUSABLE"
+    },
+    "classification_report": {
+        "0": {
+            "precision": 0.803030303030303,
+            "recall": 0.9900373599003736,
+            "f1-score": 0.886781929726715,
+            "support": 803.0
+        },
+        "1": {
+            "precision": 0.2,
+            "recall": 0.01015228426395939,
+            "f1-score": 0.01932367149758454,
+            "support": 197.0
+        },
+        "accuracy": 0.797,
+        "macro avg": {
+            "precision": 0.5015151515151515,
+            "recall": 0.5000948220821665,
+            "f1-score": 0.45305280061214975,
+            "support": 1000.0
+        },
+        "weighted avg": {
+            "precision": 0.6842333333333332,
+            "recall": 0.797,
+            "f1-score": 0.7158926528555764,
+            "support": 1000.0
+        }
+    },
+    "confusion_matrix": [
+        [
+            795,
+            8
+        ],
+        [
+            195,
+            2
+        ]
+    ],
+    "feature_importance": {
+        "Destination Port": 386.0,
+        "Flow Duration": 387.0,
+        "Total Fwd Packets": 320.0,
+        "Total Backward Packets": 297.0,
+        "Fwd Packet Length Max": 405.0,
+        "Bwd Packet Length Max": 420.0,
+        "Flow Bytes/s": 349.0,
+        "Flow Packets/s": 436.0
+    }
+}

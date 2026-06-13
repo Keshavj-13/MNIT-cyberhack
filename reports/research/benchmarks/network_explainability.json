@@ -1,0 +1,54 @@
+{
+    "gain": {
+        "Destination Port": 401.0,
+        "Flow Duration": 438.0,
+        "Total Fwd Packets": 308.0,
+        "Total Backward Packets": 302.0,
+        "Fwd Packet Length Max": 361.0,
+        "Bwd Packet Length Max": 400.0,
+        "Flow Bytes/s": 372.0,
+        "Flow Packets/s": 418.0
+    },
+    "permutation": {
+        "Destination Port": 0.007000000000000006,
+        "Flow Duration": 0.002400000000000002,
+        "Total Fwd Packets": 0.0026000000000000025,
+        "Total Backward Packets": 0.0026000000000000025,
+        "Fwd Packet Length Max": 0.004600000000000004,
+        "Bwd Packet Length Max": 0.007000000000000006,
+        "Flow Bytes/s": 0.005400000000000005,
+        "Flow Packets/s": 0.0064000000000000055
+    },
+    "lime_sample": [
+        [
+            "Fwd Packet Length Max > 0.89",
+            0.023286480798146433
+        ],
+        [
+            "Flow Bytes/s > 0.85",
+            -0.016552115057344576
+        ],
+        [
+            "-0.87 < Total Backward Packets <= -0.03",
+            -0.008634073294120557
+        ],
+        [
+            "-0.02 < Flow Packets/s <= 0.86",
+            -0.004626190066027577
+        ],
+        [
+            "Total Fwd Packets <= -0.86",
+            0.0037729215994227274
+        ]
+    ],
+    "shap": {
+        "Destination Port": 0.13055544785863976,
+        "Flow Duration": 0.18008399652219795,
+        "Total Fwd Packets": 0.08766369132749534,
+        "Total Backward Packets": 0.1263622989480911,
+        "Fwd Packet Length Max": 0.1516270492352014,
+        "Bwd Packet Length Max": 0.17917175727692042,
+        "Flow Bytes/s": 0.1908264945180654,
+        "Flow Packets/s": 0.14759824341745742
+    }
+}

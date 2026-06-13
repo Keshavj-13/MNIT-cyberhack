@@ -1,0 +1,50 @@
+{
+    "metrics": {
+        "model": "LogisticRegression",
+        "roc_auc_cv": 0.5286678480801866,
+        "roc_auc_std": 0.05261912708025819,
+        "f1_cv": 0.0,
+        "pr_auc": 0.03150204436676292,
+        "accuracy": 0.981,
+        "precision": 0.0,
+        "recall": 0.0,
+        "status": "UNUSABLE"
+    },
+    "classification_report": {
+        "0": {
+            "precision": 0.981,
+            "recall": 1.0,
+            "f1-score": 0.9904088844018173,
+            "support": 981.0
+        },
+        "1": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1-score": 0.0,
+            "support": 19.0
+        },
+        "accuracy": 0.981,
+        "macro avg": {
+            "precision": 0.4905,
+            "recall": 0.5,
+            "f1-score": 0.49520444220090865,
+            "support": 1000.0
+        },
+        "weighted avg": {
+            "precision": 0.962361,
+            "recall": 0.981,
+            "f1-score": 0.9715911155981828,
+            "support": 1000.0
+        }
+    },
+    "confusion_matrix": [
+        [
+            981,
+            0
+        ],
+        [
+            19,
+            0
+        ]
+    ]
+}

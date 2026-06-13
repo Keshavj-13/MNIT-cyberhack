@@ -1,0 +1,62 @@
+{
+    "metrics": {
+        "model": "RandomForest",
+        "roc_auc_cv": 0.524577927672623,
+        "roc_auc_std": 0.07524117361601679,
+        "f1_cv": 0.0,
+        "pr_auc": 0.01750894178792303,
+        "accuracy": 0.981,
+        "precision": 0.0,
+        "recall": 0.0,
+        "status": "UNUSABLE"
+    },
+    "classification_report": {
+        "0": {
+            "precision": 0.981,
+            "recall": 1.0,
+            "f1-score": 0.9904088844018173,
+            "support": 981.0
+        },
+        "1": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1-score": 0.0,
+            "support": 19.0
+        },
+        "accuracy": 0.981,
+        "macro avg": {
+            "precision": 0.4905,
+            "recall": 0.5,
+            "f1-score": 0.49520444220090865,
+            "support": 1000.0
+        },
+        "weighted avg": {
+            "precision": 0.962361,
+            "recall": 0.981,
+            "f1-score": 0.9715911155981828,
+            "support": 1000.0
+        }
+    },
+    "confusion_matrix": [
+        [
+            981,
+            0
+        ],
+        [
+            19,
+            0
+        ]
+    ],
+    "feature_importance": {
+        "amount": 0.24738738476868818,
+        "currency": 0.035868653848701484,
+        "transaction_type": 0.03671240871386461,
+        "merchant_category": 0.0472222892046157,
+        "account_age_days": 0.27909318361647073,
+        "tx_velocity_24h": 0.00408890421384505,
+        "amount_deviation": 0.2757285661795693,
+        "is_new_beneficiary": 9.260322681801268e-05,
+        "time_risk": 0.019343182844937804,
+        "country": 0.05446282338248918
+    }
+}

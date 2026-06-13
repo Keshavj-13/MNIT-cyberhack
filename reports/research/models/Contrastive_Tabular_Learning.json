@@ -1,0 +1,10 @@
+{
+    "training_time": 0.10401368141174316,
+    "validation_auc": 0.6820512820512821,
+    "validation_f1": 0.0,
+    "precision": 0.0,
+    "recall": 0.0,
+    "parameter_count": 993,
+    "dataset_used": "transaction",
+    "executed": true
+}

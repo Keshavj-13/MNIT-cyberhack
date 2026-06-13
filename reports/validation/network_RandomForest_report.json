@@ -1,0 +1,60 @@
+{
+    "metrics": {
+        "model": "RandomForest",
+        "roc_auc_cv": 0.4954577195208111,
+        "roc_auc_std": 0.016418462542520496,
+        "f1_cv": 0.005970446290860241,
+        "pr_auc": 0.2194192105334415,
+        "accuracy": 0.803,
+        "precision": 0.5,
+        "recall": 0.02030456852791878,
+        "status": "UNUSABLE"
+    },
+    "classification_report": {
+        "0": {
+            "precision": 0.8054435483870968,
+            "recall": 0.9950186799501868,
+            "f1-score": 0.89025069637883,
+            "support": 803.0
+        },
+        "1": {
+            "precision": 0.5,
+            "recall": 0.02030456852791878,
+            "f1-score": 0.03902439024390244,
+            "support": 197.0
+        },
+        "accuracy": 0.803,
+        "macro avg": {
+            "precision": 0.6527217741935484,
+            "recall": 0.5076616242390528,
+            "f1-score": 0.46463754331136625,
+            "support": 1000.0
+        },
+        "weighted avg": {
+            "precision": 0.7452711693548386,
+            "recall": 0.803,
+            "f1-score": 0.7225591140702493,
+            "support": 1000.0
+        }
+    },
+    "confusion_matrix": [
+        [
+            799,
+            4
+        ],
+        [
+            193,
+            4
+        ]
+    ],
+    "feature_importance": {
+        "Destination Port": 0.12782073932743607,
+        "Flow Duration": 0.13316661080568012,
+        "Total Fwd Packets": 0.10937448011383885,
+        "Total Backward Packets": 0.10779514585679381,
+        "Fwd Packet Length Max": 0.1323029263491153,
+        "Bwd Packet Length Max": 0.12944477085089492,
+        "Flow Bytes/s": 0.12579132122950365,
+        "Flow Packets/s": 0.13430400546673724
+    }
+}

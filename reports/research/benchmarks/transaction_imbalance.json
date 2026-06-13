@@ -1,0 +1,42 @@
+[
+    {
+        "sampler": "none",
+        "roc_auc": 0.4878115799689325,
+        "duration": 0.469346284866333
+    },
+    {
+        "sampler": "ros",
+        "roc_auc": 1.0,
+        "duration": 0.5492367744445801
+    },
+    {
+        "sampler": "rus",
+        "roc_auc": 0.46132500867152276,
+        "duration": 0.43392181396484375
+    },
+    {
+        "sampler": "smote",
+        "roc_auc": 0.9969631340636823,
+        "duration": 0.6099624633789062
+    },
+    {
+        "sampler": "borderline_smote",
+        "roc_auc": 0.9927597652575543,
+        "duration": 0.6098461151123047
+    },
+    {
+        "sampler": "adasyn",
+        "roc_auc": 0.9968361305919243,
+        "duration": 0.6189813613891602
+    },
+    {
+        "sampler": "smote_enn",
+        "roc_auc": 0.9969326495511704,
+        "duration": 0.6522150039672852
+    },
+    {
+        "sampler": "smote_tomek",
+        "roc_auc": 0.9970129192218217,
+        "duration": 0.6919176578521729
+    }
+]

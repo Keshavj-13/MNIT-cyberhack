@@ -1,0 +1,80 @@
+[
+    {
+        "model": "LogisticRegression",
+        "roc_auc_mean": 0.5302522234306063,
+        "roc_auc_std": 0.03849373734749034,
+        "duration": 2.7310407161712646
+    },
+    {
+        "model": "Ridge",
+        "roc_auc_mean": 0.5264677463975805,
+        "roc_auc_std": 0.030524028426175985,
+        "duration": 1.853713035583496
+    },
+    {
+        "model": "GaussianNB",
+        "roc_auc_mean": 0.503955753206338,
+        "roc_auc_std": 0.02194134067210271,
+        "duration": 1.7372651100158691
+    },
+    {
+        "model": "KNN",
+        "roc_auc_mean": 0.4998936232136438,
+        "roc_auc_std": 0.03125115954075512,
+        "duration": 1.784846544265747
+    },
+    {
+        "model": "DecisionTree",
+        "roc_auc_mean": 0.5080552020047436,
+        "roc_auc_std": 0.007599421547758604,
+        "duration": 0.09917974472045898
+    },
+    {
+        "model": "RandomForest",
+        "roc_auc_mean": 0.4591967510469244,
+        "roc_auc_std": 0.04805181910475897,
+        "duration": 0.4020872116088867
+    },
+    {
+        "model": "ExtraTrees",
+        "roc_auc_mean": 0.497308885385138,
+        "roc_auc_std": 0.05626376227490819,
+        "duration": 0.36495113372802734
+    },
+    {
+        "model": "AdaBoost",
+        "roc_auc_mean": 0.54930348279106,
+        "roc_auc_std": 0.011175199682996552,
+        "duration": 0.25377845764160156
+    },
+    {
+        "model": "GradientBoosting",
+        "roc_auc_mean": 0.5413053232652353,
+        "roc_auc_std": 0.05087785164654535,
+        "duration": 0.6404476165771484
+    },
+    {
+        "model": "HistGradientBoosting",
+        "roc_auc_mean": 0.4967843799924731,
+        "roc_auc_std": 0.036671776460669665,
+        "duration": 0.29590368270874023
+    },
+    {
+        "model": "XGBoost",
+        "roc_auc_mean": 0.501635358425753,
+        "roc_auc_std": 0.038924788828126416,
+        "duration": 0.44283485412597656
+    },
+    {
+        "model": "LightGBM",
+        "roc_auc_mean": 0.4833631972216976,
+        "roc_auc_std": 0.046187862003613,
+        "duration": 0.5804014205932617
+    },
+    {
+        "model": "CatBoost",
+        "roc_auc_mean": 0.5237380004774042,
+        "roc_auc_std": 0.033242520572124255,
+        "duration": 3.674220323562622
+    }
+]

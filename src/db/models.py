@@ -9,7 +9,10 @@ class SecurityEvent(Base):
     __tablename__ = "security_events"
     
     id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    user_id = Column(String, index=True)
+    session_id = Column(String, index=True)
+    event_category = Column(String, default="NEUTRAL") # LURE, HOOK, EXPLOIT, MONETIZE
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow, index=True)
     input_payload = Column(JSON)
     overall_risk = Column(Float)
     decision = Column(String)

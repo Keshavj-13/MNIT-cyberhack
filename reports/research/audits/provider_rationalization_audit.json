@@ -1,0 +1,10 @@
+{
+    "provider": [
+        "DeviceTrust",
+        "AccountTakeover"
+    ],
+    "action": "REVERT_TO_RULES_AND_ANOMALY",
+    "scientific_validity": "MASSIVE_INCREASE",
+    "perceived_metrics": "DECREASE_TO_REASONABLE",
+    "improved_platform": true
+}

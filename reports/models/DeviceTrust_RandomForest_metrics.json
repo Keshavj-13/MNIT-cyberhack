@@ -1,0 +1,12 @@
+{
+    "provider": "DeviceTrust",
+    "dataset": "Banknote Authentication",
+    "model": "RandomForest",
+    "accuracy": 0.9963636363636363,
+    "precision": 0.991869918699187,
+    "recall": 1.0,
+    "f1": 0.9959183673469387,
+    "roc_auc": 1.0,
+    "pr_auc": 1.0,
+    "train_time": 0.387999
+}

@@ -1,0 +1,69 @@
+{
+    "gain": {
+        "account_id": 424.0,
+        "amount": 438.0,
+        "currency": 55.0,
+        "transaction_type": 63.0,
+        "merchant_category": 112.0,
+        "recipient_id": 515.0,
+        "country": 105.0,
+        "account_age_days": 494.0,
+        "tx_velocity_24h": 10.0,
+        "amount_deviation": 475.0,
+        "is_new_beneficiary": 0.0,
+        "hour": 308.0,
+        "time_risk": 1.0
+    },
+    "permutation": {
+        "account_id": 0.0,
+        "amount": 0.0,
+        "currency": 0.0,
+        "transaction_type": 0.0,
+        "merchant_category": 0.00020000000000000017,
+        "recipient_id": 0.00020000000000000017,
+        "country": 0.0,
+        "account_age_days": 0.0,
+        "tx_velocity_24h": 0.0,
+        "amount_deviation": 0.0,
+        "is_new_beneficiary": 0.0,
+        "hour": 0.0,
+        "time_risk": 0.0
+    },
+    "lime_sample": [
+        [
+            "tx_velocity_24h <= -0.10",
+            -0.006058549332345221
+        ],
+        [
+            "-0.83 < account_id <= 0.03",
+            0.002293871599678746
+        ],
+        [
+            "-0.00 < transaction_type <= 1.21",
+            0.0013224158449369875
+        ],
+        [
+            "account_age_days <= -0.85",
+            0.001182868692224642
+        ],
+        [
+            "-0.88 < amount <= -0.02",
+            0.0010839982754258766
+        ]
+    ],
+    "shap": {
+        "account_id": 0.4451158587128417,
+        "amount": 0.4607440090144668,
+        "currency": 0.15723139784237697,
+        "transaction_type": 0.16435348943698808,
+        "merchant_category": 0.14177004168619864,
+        "recipient_id": 0.39744601641815,
+        "country": 0.36993790551118483,
+        "account_age_days": 0.44498616139794006,
+        "tx_velocity_24h": 0.0018093890987261137,
+        "amount_deviation": 0.33929988423251906,
+        "is_new_beneficiary": 0.0,
+        "hour": 0.39711213670108125,
+        "time_risk": 0.002905882500425326
+    }
+}
