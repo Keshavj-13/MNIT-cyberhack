@@ -2,6 +2,16 @@
 
 Modular ML system for detecting banking threats using Transaction Risk, Network Risk, Device Trust, and Context Risk.
 
+## Platform Preview
+
+| Risk Dashboard | Security Playground |
+|:---:|:---:|
+| ![Dashboard](./reports/release/screenshots/dashboard.png) | ![Playground](./reports/release/screenshots/playground.png) |
+
+| Decision Timeline |
+|:---:|
+| ![Timeline](./reports/release/screenshots/timeline.png) |
+
 ## Project Overview
 
 The system fuses multiple risk signals into a unified threat score. It uses an ensemble of specialized providers to evaluate transaction safety, network anomalies, device integrity, and contextual/social engineering threats.
