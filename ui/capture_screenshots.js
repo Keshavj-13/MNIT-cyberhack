@@ -7,7 +7,7 @@ async function capture() {
   const page = await browser.newPage();
   
   // Create screenshots directory
-  const docsDir = path.join(process.cwd(), '..', 'reports', 'release', 'screenshots');
+  const docsDir = path.join(process.cwd(), '..', 'screenshots');
   if (!fs.existsSync(docsDir)) {
     fs.mkdirSync(docsDir, { recursive: true });
   }

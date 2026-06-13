@@ -7,9 +7,9 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/evaluate': 'http://localhost:8080',
-      '/timeline': 'http://localhost:8080',
-      '/scenarios': 'http://localhost:8080'
+      '/evaluate': 'http://localhost:8000',
+      '/timeline': 'http://localhost:8000',
+      '/scenarios': 'http://localhost:8000'
     }
   }
 })

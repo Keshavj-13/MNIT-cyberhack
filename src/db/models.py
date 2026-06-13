@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, String, JSON, DateTime, create_engine
+from sqlalchemy import Column, Integer, Float, String, JSON, DateTime, create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import datetime
@@ -37,3 +37,25 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _migrate_schema()
+
+def _migrate_schema():
+    """Add columns that existed in the ORM model but predate the live table.
+
+    Base.metadata.create_all() only creates missing tables, it never alters
+    existing ones. security_events was created before user_id/session_id/
+    event_category were added to the ORM model, so those columns are missing
+    from older databases and every /evaluate call fails with
+    'no such column: security_events.user_id'.
+    """
+    migrations = {
+        "user_id": "ALTER TABLE security_events ADD COLUMN user_id VARCHAR DEFAULT 'ANONYMOUS'",
+        "session_id": "ALTER TABLE security_events ADD COLUMN session_id VARCHAR DEFAULT 'DEFAULT'",
+        "event_category": "ALTER TABLE security_events ADD COLUMN event_category VARCHAR DEFAULT 'NEUTRAL'",
+    }
+    with engine.connect() as conn:
+        existing_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(security_events)"))}
+        for col, ddl in migrations.items():
+            if col not in existing_cols:
+                conn.execute(text(ddl))
+        conn.commit()

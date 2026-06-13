@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Shield, Activity, Database, LayoutDashboard, Terminal, AlertTriangle } from 'lucide-react';
+import { Shield, Activity, Database, LayoutDashboard, Landmark } from 'lucide-react';
 import RiskDashboard from './components/RiskDashboard';
-import SecurityPlayground from './components/SecurityPlayground';
+import BankSimulator from './bank/BankSimulator';
 import Timeline from './components/Timeline';
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -27,12 +27,6 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleEvaluation = (result: any) => {
-    setLatestResult(result);
-    refreshTimeline();
-    setActiveTab('dashboard');
-  };
-
   return (
     <div className="flex h-screen bg-slate-950 font-sans">
       {/* Sidebar */}
@@ -50,12 +44,12 @@ function App() {
             <LayoutDashboard size={20} />
             <span>Dashboard</span>
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('playground')}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${activeTab === 'playground' ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30' : 'text-slate-400 hover:bg-slate-900'}`}
           >
-            <Terminal size={20} />
-            <span>Playground</span>
+            <Landmark size={20} />
+            <span>Bank Simulator</span>
           </button>
           <button 
             onClick={() => setActiveTab('timeline')}
@@ -75,11 +69,16 @@ function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-8">
-        {activeTab === 'dashboard' && <RiskDashboard result={latestResult} />}
-        {activeTab === 'playground' && <SecurityPlayground onEvaluate={handleEvaluation} />}
-        {activeTab === 'timeline' && <Timeline events={timeline} />}
-      </main>
+      {activeTab === 'playground' ? (
+        <main className="flex-1 overflow-hidden">
+          <BankSimulator />
+        </main>
+      ) : (
+        <main className="flex-1 overflow-y-auto p-8">
+          {activeTab === 'dashboard' && <RiskDashboard result={latestResult} />}
+          {activeTab === 'timeline' && <Timeline events={timeline} />}
+        </main>
+      )}
     </div>
   );
 }

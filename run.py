@@ -36,7 +36,7 @@ def run():
     print("[SYSTEM] Cleaning up previous environment...")
     
     # 1. Kill old processes
-    kill_process_on_port(8080)
+    kill_process_on_port(8000)
     kill_process_on_port(3000)
 
     # 2. Garbage handling: Remove old DB if it's corrupted or reset is needed
@@ -44,7 +44,7 @@ def run():
     #    os.remove("security_platform.db")
 
     # 3. Dynamic Port Allocation
-    backend_port = find_free_port(8080)
+    backend_port = find_free_port(8000)
     frontend_port = find_free_port(3000)
     
     backend_url = f"http://localhost:{backend_port}"

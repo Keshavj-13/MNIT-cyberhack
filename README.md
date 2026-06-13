@@ -6,11 +6,11 @@ Modular ML system for detecting banking threats using Transaction Risk, Network 
 
 | Risk Dashboard | Security Playground |
 |:---:|:---:|
-| ![Dashboard](./reports/release/screenshots/dashboard.png) | ![Playground](./reports/release/screenshots/playground.png) |
+| ![Dashboard](./screenshots/dashboard.png) | ![Playground](./screenshots/playground.png) |
 
 | Decision Timeline |
 |:---:|
-| ![Timeline](./reports/release/screenshots/timeline.png) |
+| ![Timeline](./screenshots/timeline.png) |
 
 ## Project Overview
 

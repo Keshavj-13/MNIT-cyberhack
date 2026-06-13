@@ -9,6 +9,8 @@ dependencies:
   - scikit-learn
   - lightgbm
   - xgboost
+  - catboost
+  - sqlalchemy
   - matplotlib
   - seaborn
   - jupyter

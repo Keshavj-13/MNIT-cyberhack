@@ -19,7 +19,8 @@ class RiskEngine:
     def __init__(self, providers: List[RiskProvider], config_path: str = "config/risk_weights.yaml"):
         self.providers = providers
         self.weights = self._load_weights(config_path)
-        
+        self._normalize_weights()
+
     def _load_weights(self, path: str) -> Dict[str, float]:
         if os.path.exists(path):
             with open(path, "r") as f:
@@ -32,6 +33,22 @@ class RiskEngine:
             "AccountTakeoverProvider": 0.15,
             "DeviceTrustProvider": 0.1
         }
+
+    def _normalize_weights(self):
+        """Normalize weights to sum to 1.0 over the providers actually registered.
+
+        The default weight table only covers 5 providers and sums to 1.0; any
+        additional registered provider (e.g. NetworkRisk, BehavioralBiometrics,
+        AuthenticationRisk) falls back to 0.05, pushing the true total to 1.15.
+        That diluted every confidence/risk score by ~13%. Normalizing here keeps
+        relative provider importance intact while restoring total_weight == 1.0.
+        """
+        raw = {p.__class__.__name__: self.weights.get(p.__class__.__name__, 0.05) for p in self.providers}
+        total = sum(raw.values())
+        if total > 0:
+            self.weights = {name: w / total for name, w in raw.items()}
+        else:
+            self.weights = raw
 
     def evaluate_all(self, input_data: Dict[str, Any], history: List[SessionEvent] = []) -> EngineResult:
         results = {}
@@ -60,21 +77,39 @@ class RiskEngine:
     def _apply_correlation(self, base_score: float, current_results: Dict[str, RiskResult], history: List[SessionEvent]) -> tuple:
         score = base_score
         expl = ""
-        
+
         # 1. Detection of LURE -> HOOK / EXPLOIT transition
-        has_recent_lure = any(e.event_category == "LURE" and e.risk_score > 0.7 for e in history[-5:])
-        has_recent_hook = any(e.event_category == "HOOK" and e.risk_score > 0.7 for e in history[-5:])
-        
+        # Use each historical event's per-category provider sub-score
+        # (category_scores), not the aggregate weighted overall_risk
+        # (e.risk_score). A single provider's contribution to overall_risk is
+        # capped by its weight (e.g. SocialEngineering's ~0.17), so the
+        # aggregate can never exceed 0.7 from one category alone and this
+        # check could never fire.
+        has_recent_lure = any(e.category_scores.get("LURE", 0.0) > 0.7 for e in history[-5:])
+        has_recent_hook = any(e.category_scores.get("HOOK", 0.0) > 0.7 for e in history[-5:])
+        has_recent_exploit = any(e.category_scores.get("EXPLOIT", 0.0) > 0.7 for e in history[-5:])
+
         current_cats = [r.event_category for r in current_results.values() if r.risk_score > 0.5]
-        
+
+        narrative = []
+
         if has_recent_lure and ("HOOK" in current_cats or "EXPLOIT" in current_cats):
             score = min(1.0, score * 1.3)
-            expl = "Risk elevated due to sequence: Previous SMISHING LURE followed by interaction."
-            
+            narrative.append("Risk elevated due to sequence: Previous SMISHING LURE followed by interaction.")
+
         if (has_recent_lure or has_recent_hook) and "MONETIZE" in current_cats:
             score = min(1.0, score * 1.5)
-            expl = "CRITICAL: Transaction attempt following confirmed Attack Chain (Lure/Hook)."
+            narrative.append("CRITICAL: Transaction attempt following confirmed Attack Chain (Lure/Hook).")
 
+        # 2. EXPLOIT -> MONETIZE transition (account takeover, no smishing precursor):
+        # a session already flagged as compromised (impossible travel, rooted
+        # device, etc.) that then attempts a monetary transfer is escalated
+        # even without a preceding LURE/HOOK.
+        if has_recent_exploit and "MONETIZE" in current_cats:
+            score = min(1.0, score * 1.5)
+            narrative.append("CRITICAL: Transaction attempt following confirmed Account Takeover (Exploit).")
+
+        expl = " ".join(narrative)
         return score, expl
 
     def _make_decision(self, score: float, conf: float, breakdown: Dict[str, RiskResult], correlation_expl: str) -> EngineResult:
