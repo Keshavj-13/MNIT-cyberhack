@@ -1,0 +1,26 @@
+name: bank_threat
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pandas
+  - numpy
+  - scikit-learn
+  - lightgbm
+  - xgboost
+  - matplotlib
+  - seaborn
+  - jupyter
+  - fastapi
+  - uvicorn
+  - joblib
+  - imbalanced-learn
+  - shap
+  - pyyaml
+  - pyarrow
+  - requests
+  - tqdm
+  - pip
+  - pip:
+    - kaggle
