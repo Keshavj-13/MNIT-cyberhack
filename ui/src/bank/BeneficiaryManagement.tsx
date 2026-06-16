@@ -39,10 +39,10 @@ const BeneficiaryManagement = ({ beneficiaries, onAdd }: BeneficiaryManagementPr
 
       <div className="space-y-2">
         {beneficiaries.map((b) => (
-          <div key={b.id} className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl p-3">
+          <div key={b.id} className="flex items-center justify-between bg-neutral-900 border border-white/5 rounded-xl p-3">
             <div>
-              <p className="text-sm text-slate-200">{b.name}</p>
-              <p className="text-xs text-slate-500 font-mono">{b.account}</p>
+              <p className="text-sm text-neutral-200">{b.name}</p>
+              <p className="text-xs text-neutral-500 font-mono">{b.account}</p>
             </div>
             {b.isNew ? (
               <span className="flex items-center space-x-1 text-xs text-amber-400 bg-amber-500/10 border border-amber-600/30 rounded-full px-2 py-1">
@@ -59,24 +59,24 @@ const BeneficiaryManagement = ({ beneficiaries, onAdd }: BeneficiaryManagementPr
         ))}
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-        <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">Add New Beneficiary</h3>
+      <div className="bg-neutral-900 border border-white/5 rounded-xl p-4">
+        <h3 className="text-sm font-bold text-neutral-400 uppercase mb-3">Add New Beneficiary</h3>
         <form onSubmit={handleAdd} className="space-y-3">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Beneficiary name"
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-teal-600"
           />
           <input
             value={account}
             onChange={(e) => setAccount(e.target.value)}
             placeholder="Account number / UPI ID"
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-teal-600"
           />
           <button
             type="submit"
-            className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded-lg transition-colors"
+            className="w-full flex items-center justify-center space-x-2 bg-teal-500 hover:bg-teal-400 text-neutral-950 font-semibold py-2 rounded-lg transition-colors"
           >
             <Plus size={16} />
             <span>Add Beneficiary</span>

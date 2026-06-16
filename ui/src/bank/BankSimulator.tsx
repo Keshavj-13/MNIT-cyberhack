@@ -31,7 +31,11 @@ const NAV_ITEMS: { key: Screen; label: string; icon: any }[] = [
   { key: 'judge', label: 'Judge Mode', icon: Gavel },
 ];
 
-const BankSimulator = () => {
+interface BankSimulatorProps {
+  onGlobalResult?: (result: any) => void;
+}
+
+const BankSimulator = ({ onGlobalResult }: BankSimulatorProps) => {
   const [mySessionId, setMySessionId] = useState(getSessionId());
   const [viewSessionId, setViewSessionId] = useState(mySessionId);
   const [screen, setScreen] = useState<Screen>('login');
@@ -45,6 +49,7 @@ const BankSimulator = () => {
 
   const handleResult = (result: any) => {
     setLatestResult(result);
+    onGlobalResult?.(result);
     bumpRefresh();
   };
 
@@ -78,7 +83,7 @@ const BankSimulator = () => {
 
   if (screen === 'login') {
     return (
-      <div className="flex h-screen bg-slate-950 font-sans">
+      <div className="flex h-screen bg-neutral-950 font-sans">
         <div className="flex-1 overflow-y-auto">
           <LoginScreen
             sessionId={mySessionId}
@@ -156,18 +161,18 @@ const BankSimulator = () => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-950 font-sans flex-col lg:flex-row">
+    <div className="flex h-screen bg-neutral-950 font-sans flex-col lg:flex-row">
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="border-b border-slate-800 px-4 py-3 flex items-center justify-between shrink-0">
-          <div className="flex items-center space-x-2 text-blue-500">
+        <header className="border-b border-white/5 px-4 py-3 flex items-center justify-between shrink-0">
+          <div className="flex items-center space-x-2 text-teal-500">
             <Landmark size={24} />
             <span className="font-bold text-lg text-white">SecureTrust Bank</span>
-            <span className="text-xs text-slate-500 ml-2">BankSimulator Demo</span>
+            <span className="text-xs text-neutral-500 ml-2">BankSimulator Demo</span>
           </div>
           <button
             onClick={() => setScreen('login')}
-            className="flex items-center space-x-1 text-xs text-slate-400 hover:text-white"
+            className="flex items-center space-x-1 text-xs text-neutral-400 hover:text-white"
           >
             <LogOut size={14} />
             <span>Sign out</span>
@@ -175,7 +180,7 @@ const BankSimulator = () => {
         </header>
 
         {/* Nav tabs */}
-        <nav className="border-b border-slate-800 px-4 flex space-x-1 overflow-x-auto shrink-0">
+        <nav className="border-b border-white/5 px-4 flex space-x-1 overflow-x-auto shrink-0">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             return (
@@ -184,8 +189,8 @@ const BankSimulator = () => {
                 onClick={() => setScreen(item.key)}
                 className={`flex items-center space-x-2 px-4 py-3 text-sm whitespace-nowrap border-b-2 transition-colors ${
                   screen === item.key
-                    ? 'border-blue-500 text-blue-400'
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                    ? 'border-teal-500 text-teal-400'
+                    : 'border-transparent text-neutral-400 hover:text-neutral-200'
                 }`}
               >
                 <Icon size={16} />

@@ -43,46 +43,46 @@ const LoginScreen = ({ sessionId, onResult, onLogin }: LoginScreenProps) => {
 
   return (
     <div className="flex items-center justify-center min-h-[70vh] p-6">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-xl">
+      <div className="w-full max-w-md bg-neutral-900 border border-white/5 rounded-2xl p-8 shadow-xl">
         <div className="flex items-center justify-center mb-6 space-x-2">
-          <div className="bg-blue-600 rounded-xl p-2">
-            <Lock className="text-white" size={22} />
+          <div className="bg-teal-500/10 border border-teal-500/20 rounded-xl p-2">
+            <Lock className="text-teal-400" size={22} />
           </div>
           <h1 className="text-xl font-bold text-white">SecureTrust Bank</h1>
         </div>
-        <p className="text-center text-slate-400 text-sm mb-6">Sign in to access your account</p>
+        <p className="text-center text-neutral-400 text-sm mb-6">Sign in to access your account</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">Username</label>
+            <label className="block text-xs font-medium text-neutral-400 mb-1">Username</label>
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-teal-600"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">Password</label>
+            <label className="block text-xs font-medium text-neutral-400 mb-1">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-teal-600"
             />
           </div>
 
           <button
             type="button"
             onClick={() => setAdvanced(!advanced)}
-            className="flex items-center space-x-1 text-xs text-slate-500 hover:text-slate-300"
+            className="flex items-center space-x-1 text-xs text-neutral-500 hover:text-neutral-300"
           >
             <ShieldQuestion size={14} />
             <span>{advanced ? 'Hide' : 'Show'} session diagnostics (demo controls)</span>
           </button>
 
           {advanced && (
-            <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2 text-xs text-slate-400">
-              <p className="text-slate-500">
+            <div className="bg-neutral-950 border border-white/5 rounded-lg p-3 space-y-2 text-xs text-neutral-400">
+              <p className="text-neutral-500">
                 Simulate signals an attacker session might exhibit (impossible travel, new/rooted device, VPN).
               </p>
               <label className="flex items-center space-x-2">
@@ -109,7 +109,7 @@ const LoginScreen = ({ sessionId, onResult, onLogin }: LoginScreenProps) => {
                   max={10}
                   value={failedAttempts}
                   onChange={(e) => setFailedAttempts(parseInt(e.target.value) || 0)}
-                  className="w-16 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white"
+                  className="w-16 bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-white"
                 />
               </label>
             </div>
@@ -118,7 +118,7 @@ const LoginScreen = ({ sessionId, onResult, onLogin }: LoginScreenProps) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold py-2 rounded-lg transition-colors"
+            className="w-full bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-neutral-950 font-semibold py-2 rounded-lg transition-colors"
           >
             {loading ? 'Signing in…' : 'Sign In'}
           </button>

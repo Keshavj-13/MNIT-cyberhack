@@ -1,0 +1,9 @@
+{
+    "source_url": "https://archive.ics.uci.edu/static/public/267/banknote+authentication.zip",
+    "download_date": "2026-06-14T13:09:09.273677",
+    "checksum": "1e2acd9a2085fadf3d8145c12d3d22af853320d52294a6590c2eaf75fdc05227",
+    "file_size": 46562,
+    "license": "Open Access",
+    "citation": "Gillich, E., & Lohweg, V. (2010). Banknote Authentication. UCI Machine Learning Repository.",
+    "status": "COMPLETED"
+}

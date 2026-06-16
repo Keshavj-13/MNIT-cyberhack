@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, String, JSON, DateTime, create_engine, text
+from sqlalchemy import Column, Integer, Float, String, JSON, DateTime, Boolean, create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import datetime
@@ -30,6 +30,34 @@ class AuditLog(Base):
     action = Column(String)
     details = Column(String)
 
+class TelemetryData(Base):
+    __tablename__ = "telemetry_data"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, index=True)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    type = Column(String) # keystroke, mouse, session
+    data = Column(JSON)
+
+class CustomerSession(Base):
+    __tablename__ = "customer_sessions"
+    
+    session_id = Column(String, primary_key=True, index=True)
+    user_id = Column(String, index=True)
+    aes_key = Column(String)  # Base64 encoded AES-256 key
+    risk_level = Column(Integer, default=1)
+    key_version = Column(Integer, default=1)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+class RevokedToken(Base):
+    __tablename__ = "revoked_tokens"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    jti = Column(String, index=True, unique=True)
+    revoked_at = Column(DateTime, default=datetime.datetime.utcnow)
+
 # DB Session setup
 SQLALCHEMY_DATABASE_URL = "sqlite:///./security_platform.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
@@ -59,3 +87,4 @@ def _migrate_schema():
             if col not in existing_cols:
                 conn.execute(text(ddl))
         conn.commit()
+

@@ -1,12 +1,27 @@
 {
+    "accuracy": 0.9999366228425359,
+    "precision": 0.999931628606591,
+    "recall": 0.999945302137319,
+    "f1": 0.9999384653252108,
+    "roc_auc": 0.9999997037907201,
+    "pr_auc": 0.9999997236030003,
+    "r_squared": 0.9998222208759344,
+    "mcfadden_r2": 0.9996161617615473,
+    "brier_score": 4.4404953477057505e-05,
+    "n_train": 662698,
+    "n_test": 142007,
+    "decision_threshold": 0.25,
+    "best_params": {
+        "subsample": 0.9,
+        "n_estimators": 600,
+        "min_child_weight": 5,
+        "max_depth": 8,
+        "learning_rate": 0.1,
+        "colsample_bytree": 0.7
+    },
+    "scale_pos_weight": 0.9418754230558478,
+    "calibration": "Platt (logistic on logit)",
     "provider": "NetworkRisk",
-    "dataset": "SIMARGL2021",
-    "model": "LightGBM",
-    "accuracy": 1.0,
-    "precision": 1.0,
-    "recall": 1.0,
-    "f1": 1.0,
-    "roc_auc": NaN,
-    "pr_auc": 1.0,
-    "train_time": 0.240275
+    "dataset": "SIMARGL2021 (part1+part2 stratified sample, ~1M rows, 4 classes)",
+    "model": "XGBoost (tuned) + Platt calibration"
 }

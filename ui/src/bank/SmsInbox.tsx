@@ -53,17 +53,17 @@ const SmsInbox = ({ sessionId, onResult, onOpenLink }: SmsInboxProps) => {
       <div className="p-6 max-w-2xl mx-auto">
         <button
           onClick={() => setOpenId(null)}
-          className="flex items-center space-x-1 text-sm text-slate-400 hover:text-white mb-4"
+          className="flex items-center space-x-1 text-sm text-neutral-400 hover:text-white mb-4"
         >
           <ChevronLeft size={16} />
           <span>Back to inbox</span>
         </button>
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <div className="bg-neutral-900 border border-white/5 rounded-xl p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="font-semibold text-white">{open.from}</span>
-            <span className="text-xs text-slate-500">{open.time}</span>
+            <span className="text-xs text-neutral-500">{open.time}</span>
           </div>
-          <p className="text-slate-200 leading-relaxed">{open.text}</p>
+          <p className="text-neutral-200 leading-relaxed">{open.text}</p>
 
           {open.suspicious && (
             <>
@@ -96,8 +96,8 @@ const SmsInbox = ({ sessionId, onResult, onOpenLink }: SmsInboxProps) => {
           <button
             key={msg.id}
             onClick={() => openMessage(msg)}
-            className={`w-full text-left bg-slate-900 border rounded-xl p-4 transition-colors hover:border-slate-600 ${
-              msg.suspicious ? 'border-amber-600/40' : 'border-slate-800'
+            className={`w-full text-left bg-neutral-900 border rounded-xl p-4 transition-colors hover:border-neutral-600 ${
+              msg.suspicious ? 'border-amber-600/40' : 'border-white/5'
             }`}
           >
             <div className="flex items-center justify-between mb-1">
@@ -105,9 +105,9 @@ const SmsInbox = ({ sessionId, onResult, onOpenLink }: SmsInboxProps) => {
                 {msg.suspicious && <AlertTriangle size={14} className="text-amber-400" />}
                 <span>{msg.from}</span>
               </span>
-              <span className="text-xs text-slate-500">{msg.time}</span>
+              <span className="text-xs text-neutral-500">{msg.time}</span>
             </div>
-            <p className="text-sm text-slate-400 truncate">{msg.text}</p>
+            <p className="text-sm text-neutral-400 truncate">{msg.text}</p>
           </button>
         ))}
       </div>

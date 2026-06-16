@@ -3,19 +3,6 @@ import time
 import sys
 import os
 import socket
-import signal
-
-def find_free_port(start_port):
-    port = start_port
-    while True:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind(('127.0.0.1', port))
-                return port
-            except socket.error:
-                port += 1
-                if port > start_port + 100:
-                    raise Exception("Could not find a free port in range.")
 
 def kill_process_on_port(port):
     if sys.platform == "win32":
@@ -33,75 +20,88 @@ def kill_process_on_port(port):
         subprocess.run(f"fuser -k {port}/tcp", shell=True, capture_output=True)
 
 def run():
-    print("[SYSTEM] Cleaning up previous environment...")
+    print("[SYSTEM] Cleaning up previous environments...")
     
-    # 1. Kill old processes
-    kill_process_on_port(8000)
-    kill_process_on_port(3000)
+    # Clean up all ports
+    all_ports = [8000, 3000, 8001, 8002, 8003, 8004, 3001, 3002, 3003, 3004]
+    for port in all_ports:
+        kill_process_on_port(port)
 
-    # 2. Garbage handling: Remove old DB if it's corrupted or reset is needed
-    # if os.path.exists("security_platform.db"):
-    #    os.remove("security_platform.db")
+    # Port allocation is fixed to ensure cryptographic and routing isolation:
+    # 8001: Customer API, 3001: Customer UI
+    # 8002: Admin API, 3002: Admin UI
+    # 8003: Attacker API, 3003: Attacker UI
+    # 8004: Showcase API, 3004: Showcase UI
 
-    # 3. Dynamic Port Allocation
-    backend_port = find_free_port(8000)
-    frontend_port = find_free_port(3000)
-    
-    backend_url = f"http://localhost:{backend_port}"
-    print(f"[SYSTEM] Backend allocated to: {backend_url}")
-    print(f"[SYSTEM] Frontend allocated to: http://localhost:{frontend_port}")
+    print("[SYSTEM] Starting MNIT Isolated Security Platform...")
+    processes = []
 
-    # 4. Generate dynamic config for Frontend (Vite .env)
-    with open("ui/.env.local", "w") as f:
-        f.write(f"VITE_API_BASE={backend_url}\n")
-    
-    # 5. Start Backend
-    print(f"[SYSTEM] Starting FastAPI Backend on port {backend_port}...")
-    backend_proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "src.api.server:app", "--port", str(backend_port), "--host", "127.0.0.1"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        shell=True
-    )
+    # 1. Start Backend FastAPI APIs
+    backends = [
+        ("Customer API", "src.api.customer_api:app", 8001),
+        ("Admin API", "src.api.admin_api:app", 8002),
+        ("Attacker API", "src.api.attacker_api:app", 8003),
+        ("Showcase API", "src.api.showcase_api:app", 8004),
+    ]
 
-    # 6. Wait for backend
-    time.sleep(3)
+    for name, import_path, port in backends:
+        print(f"[SYSTEM] Starting {name} on port {port}...")
+        proc = subprocess.Popen(
+            ["env\\python.exe", "-m", "uvicorn", import_path, "--port", str(port), "--host", "127.0.0.1"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            shell=True
+        )
+        processes.append((name, proc))
 
-    # 7. Start Frontend
-    print(f"[SYSTEM] Starting Vite Frontend on port {frontend_port}...")
-    os.chdir("ui")
-    frontend_proc = subprocess.Popen(
-        ["npm", "run", "dev", "--", "--port", str(frontend_port)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        shell=True
-    )
+    # Wait for backends to boot
+    time.sleep(4)
 
-    print("\n" + "="*40)
-    print("MNIT SECURITY PLATFORM IS RUNNING")
-    print(f"URL: http://localhost:{frontend_port}")
-    print("="*40 + "\n")
+    # 2. Start Frontend Vite instances
+    frontends = [
+        ("Customer UI", "surfaces/customer/vite.config.ts", 3001),
+        ("Admin UI", "surfaces/admin/vite.config.ts", 3002),
+        ("Attacker UI", "surfaces/attacker/vite.config.ts", 3003),
+        ("Showcase UI", "surfaces/showcase/vite.config.ts", 3004),
+    ]
+
+    for name, config_path, port in frontends:
+        print(f"[SYSTEM] Starting {name} on port {port}...")
+        proc = subprocess.Popen(
+            ["npx.cmd", "vite", "-c", config_path, "--port", str(port), "--host", "127.0.0.1"],
+            cwd="ui",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            shell=True
+        )
+        processes.append((name, proc))
+
+    print("\n" + "="*50)
+    print("MNIT FOUR ISOLATED SURFACES RUNNING")
+    print("1. Customer Bank Portal:   http://localhost:3001")
+    print("2. Admin Risk Board:       http://localhost:3002")
+    print("3. Attacker Simulator:     http://localhost:3003")
+    print("4. Public Showcase Portal: http://localhost:3004")
+    print("="*50 + "\n")
 
     try:
         while True:
             time.sleep(1)
-            # Optional: check if procs are alive
-            if backend_proc.poll() is not None:
-                print("[ERROR] Backend died. Check logs.")
-                break
-            if frontend_proc.poll() is not None:
-                print("[ERROR] Frontend died. Check logs.")
-                break
+            # Monitor all processes
+            for name, proc in processes:
+                if proc.poll() is not None:
+                    print(f"[ERROR] {name} terminated unexpectedly. Purging launcher...")
+                    raise KeyboardInterrupt
     except KeyboardInterrupt:
-        print("\n[SYSTEM] Shutting down...")
-        if sys.platform == "win32":
-            subprocess.run(f"taskkill /F /T /PID {backend_proc.pid}", shell=True)
-            subprocess.run(f"taskkill /F /T /PID {frontend_proc.pid}", shell=True)
-        else:
-            backend_proc.terminate()
-            frontend_proc.terminate()
+        print("\n[SYSTEM] Shutting down isolated surfaces...")
+        for name, proc in processes:
+            if sys.platform == "win32":
+                subprocess.run(f"taskkill /F /T /PID {proc.pid}", shell=True, capture_output=True)
+            else:
+                proc.terminate()
+        print("[SYSTEM] Teredown complete.")
 
 if __name__ == "__main__":
     run()

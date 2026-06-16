@@ -1,0 +1,15 @@
+{
+    "dataset": "balabit",
+    "file": "datasets/raw/balabit/Mouse-Dynamics-Challenge-master/training_files/user7/session_0041905381",
+    "status": "SUCCESS",
+    "error": "",
+    "rows_approx": "Unknown (Sampled 1000)",
+    "columns": [
+        "record timestamp",
+        "client timestamp",
+        "button",
+        "state",
+        "x",
+        "y"
+    ]
+}

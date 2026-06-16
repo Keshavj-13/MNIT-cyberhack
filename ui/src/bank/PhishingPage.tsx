@@ -31,7 +31,7 @@ const PhishingPage = ({ sessionId, url, onResult, onBack }: PhishingPageProps) =
     <div className="p-6 max-w-md mx-auto">
       <button
         onClick={onBack}
-        className="flex items-center space-x-1 text-sm text-slate-400 hover:text-white mb-4"
+        className="flex items-center space-x-1 text-sm text-neutral-400 hover:text-white mb-4"
       >
         <ChevronLeft size={16} />
         <span>Back</span>
@@ -42,7 +42,7 @@ const PhishingPage = ({ sessionId, url, onResult, onBack }: PhishingPageProps) =
         <span>Demo only: this page simulates a cloned phishing site reached via the SMS link ({url}).</span>
       </div>
 
-      <div className="bg-white rounded-2xl p-8 shadow-xl text-slate-900">
+      <div className="bg-white rounded-2xl p-8 shadow-xl text-neutral-900">
         <div className="flex items-center justify-center mb-6 space-x-2">
           <div className="bg-red-600 rounded-xl p-2">
             <Lock className="text-white" size={22} />
@@ -54,23 +54,23 @@ const PhishingPage = ({ sessionId, url, onResult, onBack }: PhishingPageProps) =
         </p>
 
         {submitted ? (
-          <div className="text-center text-sm text-slate-700 space-y-2">
+          <div className="text-center text-sm text-neutral-700 space-y-2">
             <p className="font-semibold">"Verification" submitted.</p>
             <p>Check the Live Risk HUD — this interaction has been flagged as a HOOK event.</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Account Username</label>
-              <input className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="rajesh.kumar" />
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Account Username</label>
+              <input className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm" placeholder="rajesh.kumar" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Password</label>
-              <input type="password" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="••••••••" />
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Password</label>
+              <input type="password" className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm" placeholder="••••••••" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">One-Time Passcode</label>
-              <input className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="123456" />
+              <label className="block text-xs font-medium text-neutral-600 mb-1">One-Time Passcode</label>
+              <input className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm" placeholder="123456" />
             </div>
             <button
               type="submit"

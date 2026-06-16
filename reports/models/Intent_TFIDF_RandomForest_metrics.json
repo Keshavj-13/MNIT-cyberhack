@@ -1,0 +1,27 @@
+{
+    "accuracy": 0.9760765550239234,
+    "precision": 0.9181818181818182,
+    "recall": 0.9017857142857143,
+    "f1": 0.9099099099099099,
+    "roc_auc": 0.988629636937648,
+    "pr_auc": 0.9669010679859668,
+    "r_squared": 0.8502567908572553,
+    "mcfadden_r2": 0.8117386987757044,
+    "brier_score": 0.017373654081532703,
+    "n_train": 3900,
+    "n_test": 836,
+    "decision_threshold": 0.2,
+    "best_params": {
+        "tfidf__ngram_range": [
+            1,
+            1
+        ],
+        "tfidf__max_features": 8000,
+        "rf__n_estimators": 100,
+        "rf__max_depth": 20
+    },
+    "calibration": "Platt (logistic on logit)",
+    "provider": "SocialEngineering",
+    "dataset": "SMS Spam Collection (full 5574 rows)",
+    "model": "TF-IDF + RandomForest (tuned) + Platt calibration"
+}

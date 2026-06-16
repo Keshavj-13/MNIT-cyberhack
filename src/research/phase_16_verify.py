@@ -44,7 +44,7 @@ def verify_models():
         print(f"--- Verifying: {name} ---")
         safe_name = name.replace(' ', '_')
         pt_path = os.path.join(MODELS_DIR, f"{safe_name}.pt")
-        json_path = os.path.join(RESULTS_DIR, f"{safe_name}.json")
+        json_path = os.path.join("reports/research/models", f"{safe_name}.json")
         
         verified = False
         param_count = 0

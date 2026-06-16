@@ -79,13 +79,13 @@ const TransferMoney = ({ sessionId, beneficiaries, onResult }: TransferMoneyProp
         <span>Transfer Money</span>
       </h2>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-4">
+      <div className="bg-neutral-900 border border-white/5 rounded-xl p-4 space-y-4">
         <div>
-          <label className="block text-xs font-medium text-slate-400 mb-1">Beneficiary</label>
+          <label className="block text-xs font-medium text-neutral-400 mb-1">Beneficiary</label>
           <select
             value={beneficiaryId}
             onChange={(e) => setBeneficiaryId(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-teal-600"
           >
             {beneficiaries.map((b) => (
               <option key={b.id} value={b.id}>
@@ -95,12 +95,12 @@ const TransferMoney = ({ sessionId, beneficiaries, onResult }: TransferMoneyProp
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-400 mb-1">Amount (₹)</label>
+          <label className="block text-xs font-medium text-neutral-400 mb-1">Amount (₹)</label>
           <input
             type="number"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-teal-600"
           />
         </div>
 
@@ -114,7 +114,7 @@ const TransferMoney = ({ sessionId, beneficiaries, onResult }: TransferMoneyProp
         <button
           onClick={handleSubmit}
           disabled={loading || !beneficiaryId}
-          className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold py-2 rounded-lg transition-colors"
+          className="w-full flex items-center justify-center space-x-2 bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-neutral-950 font-semibold py-2 rounded-lg transition-colors"
         >
           <Send size={16} />
           <span>{loading ? 'Processing…' : 'Send Transfer'}</span>

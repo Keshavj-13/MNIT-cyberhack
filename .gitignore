@@ -1,9 +1,18 @@
 # Datasets
+datasets/raw/
+datasets/**/raw/
 data/raw/
 data/intermediate/
 data/processed/
 *.parquet
 *.csv
+*.arff
+*.zip
+*.tgz
+*.tar
+*.tar.gz
+*.7z
+*.rar
 
 # Models
 models/*.joblib
@@ -29,6 +38,7 @@ conda-meta/
 # Reports
 reports/research/raw/
 reports/models/raw/
+reports/**/raw/
 
 # Python
 __pycache__/

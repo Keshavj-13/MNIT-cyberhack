@@ -1,0 +1,7 @@
+{
+    "source_url": "https://huggingface.co/datasets/anmorgan24/creditcard_fraud_csv",
+    "download_date": "2026-06-14T13:09:10.329944",
+    "license": "CC BY-NC-SA 4.0",
+    "citation": "Dal Pozzolo et al. (2015). Calibrating Probability with Undersampling for Unbalanced Classification.",
+    "status": "COMPLETED"
+}

@@ -1,0 +1,52 @@
+{
+    "dataset_story": "The Balabit Mouse Dynamics Challenge dataset contains mouse movements from multiple users across various sessions. It is a benchmark for behavioral biometric authentication.",
+    "aura_purpose": "Used to verify user identity through mouse movement patterns (speed, acceleration, curvature).",
+    "risk_mapping": {
+        "Behavioral Risk": "Primary",
+        "Device Risk": "Secondary",
+        "Environment Risk": "Not Used",
+        "Transaction Risk": "Not Used",
+        "Failure Risk": "Not Used",
+        "Intent Risk": "Not Used"
+    },
+    "overview": {
+        "name": "Balabit",
+        "domain": "Threat Detection",
+        "source": "https://github.com/balabit/Mouse-Dynamics-Challenge",
+        "license": "Open Research",
+        "data_type": "Real-world",
+        "title": "Balabit Mouse Dynamics Challenge"
+    },
+    "citation": {
+        "text": "Antal & Egyed-Zsigmond (2019). Intrusion Detection Using Mouse Dynamics. IET Biometrics."
+    },
+    "feature_dictionary": {
+        "x": {
+            "description": "Horizontal cursor position"
+        },
+        "y": {
+            "description": "Vertical cursor position"
+        },
+        "t": {
+            "description": "Timestamp of the event",
+            "units": "seconds"
+        },
+        "state": {
+            "description": "Mouse event state (e.g., Pressed, Released, Dragging)"
+        }
+    },
+    "feature_groups": {
+        "Raw": [
+            "x",
+            "y",
+            "t",
+            "state"
+        ],
+        "Computed": [
+            "velocity",
+            "acceleration",
+            "jerk",
+            "angular_velocity"
+        ]
+    }
+}

@@ -1,0 +1,71 @@
+{
+    "dataset_story": "PaySim simulates mobile money transactions based on a sample of real transactions extracted from one month of financial logs. It is the primary benchmark for mobile fraud detection in AURA.",
+    "aura_purpose": "Used to train transaction fraud probability estimation for mobile-first banking flows.",
+    "risk_mapping": {
+        "Behavioral Risk": "Secondary",
+        "Device Risk": "Not Used",
+        "Environment Risk": "Not Used",
+        "Transaction Risk": "Primary",
+        "Failure Risk": "Not Used",
+        "Intent Risk": "Not Used"
+    },
+    "overview": {
+        "name": "Paysim",
+        "domain": "Threat Detection",
+        "source": "Official Source",
+        "license": "Unknown",
+        "data_type": "Synthetic",
+        "title": "Synthetic Financial Datasets For Fraud Detection"
+    },
+    "citation": {
+        "text": "Citation available in metadata/citation.bib"
+    },
+    "feature_dictionary": {
+        "step": {
+            "description": "Unit of time in the real world (1 step = 1 hour)",
+            "units": "hours"
+        },
+        "type": {
+            "description": "Type of transaction (CASH-IN, CASH-OUT, DEBIT, PAYMENT, TRANSFER)",
+            "allowed_values": "Categorical"
+        },
+        "amount": {
+            "description": "Transaction amount in local currency",
+            "units": "Currency"
+        },
+        "nameOrig": {
+            "description": "Customer who started the transaction"
+        },
+        "oldbalanceOrg": {
+            "description": "Sender balance before transaction"
+        },
+        "newbalanceOrig": {
+            "description": "Sender balance after transaction"
+        },
+        "isFraud": {
+            "description": "Binary label for fraudulent transactions",
+            "allowed_values": "0, 1"
+        }
+    },
+    "feature_groups": {
+        "Transaction": [
+            "step",
+            "type",
+            "amount"
+        ],
+        "Account": [
+            "nameOrig",
+            "nameDest"
+        ],
+        "Balance": [
+            "oldbalanceOrg",
+            "newbalanceOrig",
+            "oldbalanceDest",
+            "newbalanceDest"
+        ],
+        "Label": [
+            "isFraud",
+            "isFlaggedFraud"
+        ]
+    }
+}

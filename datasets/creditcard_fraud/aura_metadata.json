@@ -1,0 +1,23 @@
+{
+    "dataset_story": "This real-world dataset contains transactions made by credit cards in September 2013 by European cardholders. It features a highly skewed label distribution (0.172% fraud).",
+    "aura_purpose": "Primary benchmark for high-velocity credit card transaction risk scoring.",
+    "risk_mapping": {
+        "Behavioral Risk": "Not Used",
+        "Device Risk": "Not Used",
+        "Environment Risk": "Not Used",
+        "Transaction Risk": "Primary",
+        "Failure Risk": "Not Used",
+        "Intent Risk": "Not Used"
+    },
+    "overview": {
+        "name": "Creditcard Fraud",
+        "domain": "Threat Detection",
+        "source": "https://huggingface.co/datasets/anmorgan24/creditcard_fraud_csv",
+        "license": "CC BY-NC-SA 4.0",
+        "data_type": "Synthetic",
+        "title": "Credit Card Fraud Detection"
+    },
+    "citation": {
+        "text": "Dal Pozzolo et al. (2015). Calibrating Probability with Undersampling for Unbalanced Classification."
+    }
+}

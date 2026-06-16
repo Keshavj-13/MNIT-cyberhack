@@ -1,0 +1,5 @@
+{
+    "status": "MANUAL_DOWNLOAD_REQUIRED",
+    "notes": "Failed to download files for HF repo beacon-gui/BEACON-Dataset. Might be gated.",
+    "source_url": "https://huggingface.co/datasets/beacon-gui/BEACON-Dataset"
+}

@@ -1,0 +1,7 @@
+{
+  "plaintext": "Hello from Web Crypto Subtle API!",
+  "key_b64": "+QReu19AeISIIQXjd1tagedG2oyilstNKO5Dmkj1UVc=",
+  "ciphertext_b64": "afNc28lDxtUaLy89U5s5xyIaF4k8wqvJ+1bISy6aB2fW",
+  "nonce_b64": "4Nb7poe79IvJx8wVZ7dmZA==",
+  "tag_b64": "WfXalL13olPbn/t+GgmK5pFA89q3heF/tqAwD5KYC9M="
+}

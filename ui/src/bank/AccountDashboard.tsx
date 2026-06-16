@@ -13,35 +13,35 @@ const AccountDashboard = () => {
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
-      <div className="bg-gradient-to-br from-blue-700 to-blue-900 rounded-2xl p-6 text-white shadow-lg">
+      <div className="bg-gradient-to-br from-teal-600 via-teal-700 to-neutral-900 rounded-2xl p-6 text-white shadow-lg shadow-teal-950/40">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-blue-200 text-xs uppercase tracking-wide">Savings Account · **** 7421</p>
+            <p className="text-teal-100/70 text-xs uppercase tracking-wide">Savings Account · **** 7421</p>
             <p className="text-3xl font-bold mt-1">₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
           </div>
-          <Wallet size={36} className="text-blue-200" />
+          <Wallet size={36} className="text-teal-100/70" />
         </div>
-        <div className="mt-4 flex items-center space-x-1 text-xs text-blue-200">
+        <div className="mt-4 flex items-center space-x-1 text-xs text-teal-100/70">
           <CreditCard size={14} />
           <span>Rajesh Kumar · SecureTrust Bank</span>
         </div>
       </div>
 
       <div>
-        <h2 className="text-sm font-bold text-slate-400 uppercase mb-3">Recent Activity</h2>
+        <h2 className="text-sm font-bold text-neutral-400 uppercase mb-3">Recent Activity</h2>
         <div className="space-y-2">
           {TRANSACTIONS.map((tx) => (
-            <div key={tx.id} className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl p-3">
+            <div key={tx.id} className="flex items-center justify-between bg-neutral-900 border border-white/5 rounded-xl p-3">
               <div className="flex items-center space-x-3">
-                <div className={`rounded-full p-2 ${tx.type === 'credit' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
+                <div className={`rounded-full p-2 ${tx.type === 'credit' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-400'}`}>
                   {tx.type === 'credit' ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}
                 </div>
                 <div>
-                  <p className="text-sm text-slate-200">{tx.label}</p>
-                  <p className="text-xs text-slate-500">{tx.date}</p>
+                  <p className="text-sm text-neutral-200">{tx.label}</p>
+                  <p className="text-xs text-neutral-500">{tx.date}</p>
                 </div>
               </div>
-              <span className={`text-sm font-semibold ${tx.type === 'credit' ? 'text-emerald-400' : 'text-slate-300'}`}>
+              <span className={`text-sm font-semibold ${tx.type === 'credit' ? 'text-emerald-400' : 'text-neutral-300'}`}>
                 {tx.type === 'credit' ? '+' : ''}₹{Math.abs(tx.amount).toLocaleString('en-IN')}
               </span>
             </div>

@@ -9,7 +9,8 @@ export default defineConfig({
     proxy: {
       '/evaluate': 'http://localhost:8000',
       '/timeline': 'http://localhost:8000',
-      '/scenarios': 'http://localhost:8000'
+      '/scenarios': 'http://localhost:8000',
+      '/verification-reports': 'http://localhost:8000'
     }
   }
 })

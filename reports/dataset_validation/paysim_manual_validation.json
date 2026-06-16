@@ -1,0 +1,20 @@
+{
+    "dataset": "paysim",
+    "file": "datasets/raw/paysim/PS_20174392719_1491204439457_log.csv",
+    "status": "SUCCESS",
+    "error": "",
+    "rows_approx": "Unknown (Sampled 1000)",
+    "columns": [
+        "step",
+        "type",
+        "amount",
+        "nameOrig",
+        "oldbalanceOrg",
+        "newbalanceOrig",
+        "nameDest",
+        "oldbalanceDest",
+        "newbalanceDest",
+        "isFraud",
+        "isFlaggedFraud"
+    ]
+}

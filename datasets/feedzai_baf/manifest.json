@@ -1,0 +1,7 @@
+{
+    "source_url": "https://www.kaggle.com/datasets/sgpjesus/bank-account-fraud-dataset-neurips-2022",
+    "download_date": "2026-06-14T12:46:00",
+    "status": "COMPLETED",
+    "license": "CC BY-NC-SA 4.0",
+    "citation": "Jesus, S. et al. (2022). Turning the Tables: Biased, Imbalanced, Dynamic Tabular Datasets for ML Evaluation. NeurIPS."
+}

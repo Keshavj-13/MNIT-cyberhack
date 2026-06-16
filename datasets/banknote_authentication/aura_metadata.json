@@ -1,0 +1,33 @@
+{
+    "dataset_story": "The Banknote Authentication dataset consists of features extracted from images of genuine and forged banknote-like specimens. In AURA, it serves as a proxy for validating physical security features and document integrity.",
+    "aura_purpose": "Used to model physical document trust and identity verification proxies.",
+    "risk_mapping": {
+        "Behavioral Risk": "Secondary",
+        "Device Risk": "Secondary",
+        "Environment Risk": "Not Used",
+        "Transaction Risk": "Not Used",
+        "Failure Risk": "Not Used",
+        "Intent Risk": "Primary"
+    },
+    "overview": {
+        "name": "Banknote Authentication",
+        "domain": "Identity Verification",
+        "source": "https://archive.ics.uci.edu/ml/datasets/banknote+authentication",
+        "license": "Open Access",
+        "data_type": "Real"
+    },
+    "citation": {
+        "text": "Gillich, E., & Lohweg, V. (2010). Banknote Authentication. UCI Machine Learning Repository."
+    },
+    "feature_dictionary": {
+        "variance": {"description": "Variance of Wavelet Transformed image"},
+        "skewness": {"description": "Skewness of Wavelet Transformed image"},
+        "curtosis": {"description": "Curtosis of Wavelet Transformed image"},
+        "entropy": {"description": "Entropy of image"},
+        "class": {"description": "Target class (0: genuine, 1: forged)"}
+    },
+    "feature_groups": {
+        "Image Features": ["variance", "skewness", "curtosis", "entropy"],
+        "Label": ["class"]
+    }
+}

@@ -1,0 +1,16 @@
+{
+    "dataset": "balabit",
+    "timestamp": "2026-06-14T13:09:09.136387",
+    "files_found": 1679,
+    "validation_results": [
+        {
+            "file": "public_labels.csv",
+            "status": "SUCCESS",
+            "rows_preview": 100,
+            "columns": [
+                "filename",
+                "is_illegal"
+            ]
+        }
+    ]
+}

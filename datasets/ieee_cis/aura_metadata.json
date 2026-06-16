@@ -1,0 +1,31 @@
+{
+    "dataset_story": "The IEEE-CIS Fraud Detection dataset features real-world commercial online transactions. It is a cornerstone for AURA's transaction-level risk models due to its complexity and scale.",
+    "aura_purpose": "Primary benchmark for complex, real-world online payment fraud detection.",
+    "risk_mapping": {
+        "Behavioral Risk": "Secondary",
+        "Device Risk": "Secondary",
+        "Environment Risk": "Not Used",
+        "Transaction Risk": "Primary",
+        "Failure Risk": "Not Used",
+        "Intent Risk": "Not Used"
+    },
+    "overview": {
+        "name": "IEEE-CIS Fraud Detection",
+        "domain": "Transaction Fraud",
+        "source": "https://www.kaggle.com/competitions/ieee-fraud-detection",
+        "license": "Competition Terms",
+        "data_type": "Real, Anonymized"
+    },
+    "citation": {
+        "text": "Vesta Corp (2019). IEEE-CIS Fraud Detection Competition. Kaggle."
+    },
+    "feature_dictionary": {
+        "TransactionAmt": {"description": "Transaction payment amount in USD", "units": "USD"},
+        "ProductCD": {"description": "Product code for the transaction"},
+        "isFraud": {"description": "Target label (1: Fraud, 0: Legitimate)"}
+    },
+    "feature_groups": {
+        "Transaction": ["TransactionAmt", "ProductCD"],
+        "Label": ["isFraud"]
+    }
+}

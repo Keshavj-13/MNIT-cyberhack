@@ -1,0 +1,1144 @@
+{
+    "dataset": "amlsim",
+    "timestamp": "2026-06-14T13:09:09.207569",
+    "files_found": 188,
+    "validation_results": [
+        {
+            "file": "conf.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "accounts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 5,
+            "columns": [
+                "count",
+                "min_balance",
+                "max_balance",
+                "country",
+                "business_type",
+                "model",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "AggregateTransaction.csv",
+            "status": "SUCCESS",
+            "rows_preview": 0,
+            "columns": [
+                "type",
+                "tmonth",
+                "tday",
+                "thour",
+                "tcount",
+                "tsum",
+                "tavg",
+                "tstd",
+                "step"
+            ]
+        },
+        {
+            "file": "alertPatterns.csv",
+            "status": "SUCCESS",
+            "rows_preview": 3,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_amount",
+                "max_amount",
+                "min_period",
+                "max_period",
+                "bank_id",
+                "is_sar"
+            ]
+        },
+        {
+            "file": "conf_sample.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "degree.csv",
+            "status": "SUCCESS",
+            "rows_preview": 100,
+            "columns": [
+                "Count",
+                "In-degree",
+                "Out-degree"
+            ]
+        },
+        {
+            "file": "initialBalanceClients.csv",
+            "status": "SUCCESS",
+            "rows_preview": 0,
+            "columns": [
+                "range_start",
+                "range_end",
+                "percentage"
+            ]
+        },
+        {
+            "file": "schema.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "transactionType.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "Type",
+                "Frequency"
+            ]
+        },
+        {
+            "file": "transferFreq4Mod.csv",
+            "status": "SUCCESS",
+            "rows_preview": 0,
+            "columns": [
+                "type",
+                "high",
+                "low",
+                "total",
+                "freq"
+            ]
+        },
+        {
+            "file": "transferFreq4ModInit.csv",
+            "status": "SUCCESS",
+            "rows_preview": 5,
+            "columns": [
+                "CASH_IN",
+                "0.0088153"
+            ]
+        },
+        {
+            "file": "transferMax.csv",
+            "status": "SUCCESS",
+            "rows_preview": 8,
+            "columns": [
+                "type",
+                "max(numTrans)"
+            ]
+        },
+        {
+            "file": "accounts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 5,
+            "columns": [
+                "count",
+                "min_balance",
+                "max_balance",
+                "country",
+                "business_type",
+                "model",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "alertPatterns.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_amount",
+                "max_amount",
+                "min_period",
+                "max_period",
+                "bank_id",
+                "is_sar"
+            ]
+        },
+        {
+            "file": "degree.csv",
+            "status": "SUCCESS",
+            "rows_preview": 26,
+            "columns": [
+                "Count",
+                "In-degree",
+                "Out-degree"
+            ]
+        },
+        {
+            "file": "normalModels.csv",
+            "status": "SUCCESS",
+            "rows_preview": 6,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_period",
+                "max_period",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "schema.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "transactionType.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "Type",
+                "Frequency"
+            ]
+        },
+        {
+            "file": "accounts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 5,
+            "columns": [
+                "count",
+                "min_balance",
+                "max_balance",
+                "country",
+                "business_type",
+                "model",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "alertPatterns.csv",
+            "status": "SUCCESS",
+            "rows_preview": 3,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_amount",
+                "max_amount",
+                "min_period",
+                "max_period",
+                "bank_id",
+                "is_sar"
+            ]
+        },
+        {
+            "file": "conf.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "degree.csv",
+            "status": "SUCCESS",
+            "rows_preview": 100,
+            "columns": [
+                "Count",
+                "In-degree",
+                "Out-degree"
+            ]
+        },
+        {
+            "file": "normalModels.csv",
+            "status": "SUCCESS",
+            "rows_preview": 6,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_period",
+                "max_period",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "schema.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "transactionType.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "Type",
+                "Frequency"
+            ]
+        },
+        {
+            "file": "accounts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 6,
+            "columns": [
+                "count",
+                "min_balance",
+                "max_balance",
+                "country",
+                "business_type",
+                "model",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "alertPatterns.csv",
+            "status": "SUCCESS",
+            "rows_preview": 3,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_amount",
+                "max_amount",
+                "min_period",
+                "max_period",
+                "bank_id",
+                "is_sar"
+            ]
+        },
+        {
+            "file": "conf.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "degree.csv",
+            "status": "SUCCESS",
+            "rows_preview": 100,
+            "columns": [
+                "Count",
+                "In-degree",
+                "Out-degree"
+            ]
+        },
+        {
+            "file": "normalModels.csv",
+            "status": "SUCCESS",
+            "rows_preview": 6,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_period",
+                "max_period",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "schema.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "transactionType.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "Type",
+                "Frequency"
+            ]
+        },
+        {
+            "file": "accounts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 50,
+            "columns": [
+                "count",
+                "min_balance",
+                "max_balance",
+                "country",
+                "business_type",
+                "model",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "alertPatterns.csv",
+            "status": "SUCCESS",
+            "rows_preview": 3,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_amount",
+                "max_amount",
+                "min_period",
+                "max_period",
+                "bank_id",
+                "is_sar"
+            ]
+        },
+        {
+            "file": "degree.csv",
+            "status": "SUCCESS",
+            "rows_preview": 100,
+            "columns": [
+                "Count",
+                "In-degree",
+                "Out-degree"
+            ]
+        },
+        {
+            "file": "normalModels.csv",
+            "status": "SUCCESS",
+            "rows_preview": 6,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_period",
+                "max_period",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "schema.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "transactionType.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "Type",
+                "Frequency"
+            ]
+        },
+        {
+            "file": "accounts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 6,
+            "columns": [
+                "count",
+                "min_balance",
+                "max_balance",
+                "country",
+                "business_type",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "alertPatterns.csv",
+            "status": "SUCCESS",
+            "rows_preview": 3,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_amount",
+                "max_amount",
+                "min_period",
+                "max_period",
+                "bank_id",
+                "is_sar"
+            ]
+        },
+        {
+            "file": "conf.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "degree.csv",
+            "status": "SUCCESS",
+            "rows_preview": 54,
+            "columns": [
+                "Count",
+                "In-degree",
+                "Out-degree"
+            ]
+        },
+        {
+            "file": "normalModels.csv",
+            "status": "SUCCESS",
+            "rows_preview": 6,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_period",
+                "max_period",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "schema.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "transactionType.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "Type",
+                "Frequency"
+            ]
+        },
+        {
+            "file": "accounts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 5,
+            "columns": [
+                "count",
+                "min_balance",
+                "max_balance",
+                "country",
+                "business_type",
+                "model",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "alertPatterns.csv",
+            "status": "SUCCESS",
+            "rows_preview": 3,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_amount",
+                "max_amount",
+                "min_period",
+                "max_period",
+                "bank_id",
+                "is_sar"
+            ]
+        },
+        {
+            "file": "degree.csv",
+            "status": "SUCCESS",
+            "rows_preview": 100,
+            "columns": [
+                "Count",
+                "In-degree",
+                "Out-degree"
+            ]
+        },
+        {
+            "file": "normalModels.csv",
+            "status": "SUCCESS",
+            "rows_preview": 6,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_period",
+                "max_period",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "schema.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "transactionType.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "Type",
+                "Frequency"
+            ]
+        },
+        {
+            "file": "accounts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "count",
+                "min_balance",
+                "max_balance",
+                "country",
+                "business_type",
+                "model",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "alertPatterns.csv",
+            "status": "SUCCESS",
+            "rows_preview": 2,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_amount",
+                "max_amount",
+                "min_period",
+                "max_period",
+                "bank_id",
+                "is_sar"
+            ]
+        },
+        {
+            "file": "conf.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "degree.csv",
+            "status": "SUCCESS",
+            "rows_preview": 26,
+            "columns": [
+                "Count",
+                "In-degree",
+                "Out-degree"
+            ]
+        },
+        {
+            "file": "normalModels.csv",
+            "status": "SUCCESS",
+            "rows_preview": 6,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_period",
+                "max_period",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "schema.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "transactionType.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "Type",
+                "Frequency"
+            ]
+        },
+        {
+            "file": "accounts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "count",
+                "min_balance",
+                "max_balance",
+                "country",
+                "business_type",
+                "model",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "alertPatterns.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_amount",
+                "max_amount",
+                "min_period",
+                "max_period",
+                "bank_id",
+                "is_sar"
+            ]
+        },
+        {
+            "file": "degree.csv",
+            "status": "SUCCESS",
+            "rows_preview": 5,
+            "columns": [
+                "Count",
+                "In-degree",
+                "Out-degree"
+            ]
+        },
+        {
+            "file": "normalModels.csv",
+            "status": "SUCCESS",
+            "rows_preview": 3,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_period",
+                "max_period",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "schema.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "transactionType.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "Type",
+                "Frequency"
+            ]
+        },
+        {
+            "file": "accounts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "count",
+                "min_balance",
+                "max_balance",
+                "country",
+                "business_type",
+                "model",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "alertPatterns.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_amount",
+                "max_amount",
+                "min_period",
+                "max_period",
+                "bank_id",
+                "is_sar"
+            ]
+        },
+        {
+            "file": "degree.csv",
+            "status": "SUCCESS",
+            "rows_preview": 13,
+            "columns": [
+                "Count",
+                "In-degree",
+                "Out-degree"
+            ]
+        },
+        {
+            "file": "normalModels.csv",
+            "status": "SUCCESS",
+            "rows_preview": 4,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_period",
+                "max_period",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "schema.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "transactionType.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "Type",
+                "Frequency"
+            ]
+        },
+        {
+            "file": "accounts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "count",
+                "min_balance",
+                "max_balance",
+                "country",
+                "business_type",
+                "model",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "alertPatterns.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_amount",
+                "max_amount",
+                "min_period",
+                "max_period",
+                "bank_id",
+                "is_sar"
+            ]
+        },
+        {
+            "file": "degree.csv",
+            "status": "SUCCESS",
+            "rows_preview": 5,
+            "columns": [
+                "Count",
+                "In-degree",
+                "Out-degree"
+            ]
+        },
+        {
+            "file": "normalModels.csv",
+            "status": "SUCCESS",
+            "rows_preview": 2,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_period",
+                "max_period",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "schema.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "transactionType.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "Type",
+                "Frequency"
+            ]
+        },
+        {
+            "file": "accounts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 3,
+            "columns": [
+                "count",
+                "min_balance",
+                "max_balance",
+                "country",
+                "business_type",
+                "model",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "alertPatterns.csv",
+            "status": "SUCCESS",
+            "rows_preview": 3,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_amount",
+                "max_amount",
+                "min_period",
+                "max_period",
+                "bank_id",
+                "is_sar"
+            ]
+        },
+        {
+            "file": "conf.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "degree.csv",
+            "status": "SUCCESS",
+            "rows_preview": 26,
+            "columns": [
+                "Count",
+                "In-degree",
+                "Out-degree"
+            ]
+        },
+        {
+            "file": "normalModels.csv",
+            "status": "SUCCESS",
+            "rows_preview": 6,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_period",
+                "max_period",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "schema.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "transactionType.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "Type",
+                "Frequency"
+            ]
+        },
+        {
+            "file": "accounts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 3,
+            "columns": [
+                "count",
+                "min_balance",
+                "max_balance",
+                "country",
+                "business_type",
+                "model",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "alertPatterns.csv",
+            "status": "SUCCESS",
+            "rows_preview": 8,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_amount",
+                "max_amount",
+                "min_period",
+                "max_period",
+                "bank_id",
+                "is_sar"
+            ]
+        },
+        {
+            "file": "conf.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "degree.csv",
+            "status": "SUCCESS",
+            "rows_preview": 26,
+            "columns": [
+                "Count",
+                "In-degree",
+                "Out-degree"
+            ]
+        },
+        {
+            "file": "normalModels.csv",
+            "status": "SUCCESS",
+            "rows_preview": 4,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "min_accounts",
+                "max_accounts",
+                "min_period",
+                "max_period",
+                "bank_id"
+            ]
+        },
+        {
+            "file": "schema.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        },
+        {
+            "file": "transactionType.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "Type",
+                "Frequency"
+            ]
+        },
+        {
+            "file": "accounts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 30,
+            "columns": [
+                "ACCOUNT_ID",
+                "PRIMARY_CUSTOMER_ID",
+                "init_balance",
+                "start",
+                "end",
+                "country",
+                "business",
+                "suspicious",
+                "isFraud",
+                "modelID"
+            ]
+        },
+        {
+            "file": "alerts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 2,
+            "columns": [
+                "ALERT_KEY",
+                "ALERT_TEXT",
+                "ACCOUNT_ID",
+                "CUSTOMER_ID",
+                "EVENT_DATE",
+                "CHECK_NAME",
+                "Organization_Type",
+                "Escalated_To_Case_Investigation"
+            ]
+        },
+        {
+            "file": "cash_tx.csv",
+            "status": "SUCCESS",
+            "rows_preview": 88,
+            "columns": [
+                "TXN_ID",
+                "ACCOUNT_ID",
+                "BRANCH_ID",
+                "TXN_SOURCE_TYPE_CODE",
+                "tx_count",
+                "TXN_AMOUNT_ORIG",
+                "RUN_DATE",
+                "end"
+            ]
+        },
+        {
+            "file": "tx.csv",
+            "status": "SUCCESS",
+            "rows_preview": 45,
+            "columns": [
+                "TXN_ID",
+                "ACCOUNT_ID",
+                "COUNTER_PARTY_ACCOUNT_NUM",
+                "TXN_SOURCE_TYPE_CODE",
+                "tx_count",
+                "TXN_AMOUNT_ORIG",
+                "start",
+                "end"
+            ]
+        },
+        {
+            "file": "accounts.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "count",
+                "min_balance",
+                "max_balance",
+                "start_day",
+                "end_day",
+                "country",
+                "business_type",
+                "suspicious",
+                "model"
+            ]
+        },
+        {
+            "file": "alertPatterns.csv",
+            "status": "SUCCESS",
+            "rows_preview": 1,
+            "columns": [
+                "count",
+                "type",
+                "schedule_id",
+                "accounts",
+                "individual_amount",
+                "aggregated_amount",
+                "transaction_count",
+                "amount_difference",
+                "period",
+                "amount_rounded",
+                "orig_country",
+                "bene_country",
+                "orig_business",
+                "bene_business",
+                "is_sar"
+            ]
+        },
+        {
+            "file": "degree.csv",
+            "status": "SUCCESS",
+            "rows_preview": 10,
+            "columns": [
+                "Count",
+                "In-degree",
+                "Out-degree"
+            ]
+        },
+        {
+            "file": "transactionType.csv",
+            "status": "SUCCESS",
+            "rows_preview": 4,
+            "columns": [
+                "Type",
+                "Frequency"
+            ]
+        },
+        {
+            "file": "degree.csv",
+            "status": "SUCCESS",
+            "rows_preview": 6,
+            "columns": [
+                "Count",
+                "In-degree",
+                "Out-degree"
+            ]
+        },
+        {
+            "file": "schema.json",
+            "status": "SUCCESS",
+            "type": "JSON"
+        }
+    ]
+}

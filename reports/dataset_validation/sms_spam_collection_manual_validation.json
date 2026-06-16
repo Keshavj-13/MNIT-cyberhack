@@ -1,0 +1,11 @@
+{
+    "dataset": "sms_spam_collection",
+    "file": "datasets/raw/sms_spam_collection/SMSSpamCollection",
+    "status": "SUCCESS",
+    "error": "",
+    "rows_approx": "Unknown (Sampled 1000)",
+    "columns": [
+        "label",
+        "text"
+    ]
+}

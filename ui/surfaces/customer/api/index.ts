@@ -1,0 +1,136 @@
+import axios from 'axios';
+import { encryptData, decryptData } from './crypto';
+
+const API_BASE = 'http://localhost:8001';
+
+// Enable cookie credentials
+axios.defaults.withCredentials = true;
+
+export interface EncryptedPayload {
+  session_id: string;
+  key_version: int;
+  ciphertext: string;
+  nonce: string;
+  tag: string;
+}
+
+export interface CryptoState {
+  aesKey: string;
+  keyVersion: number;
+  sessionId: string;
+  riskLevel: number;
+}
+
+// Helper to encrypt body and construct the EncryptedPayload
+async function makeEncryptedRequest(
+  endpoint: string,
+  body: Record<string, any>,
+  cryptoState: CryptoState
+): Promise<any> {
+  const plaintext = JSON.stringify(body);
+  const encrypted = await encryptData(plaintext, cryptoState.aesKey);
+  
+  const payload: EncryptedPayload = {
+    session_id: cryptoState.sessionId,
+    key_version: cryptoState.keyVersion,
+    ciphertext: encrypted.ciphertext,
+    nonce: encrypted.nonce,
+    tag: encrypted.tag
+  };
+
+  const res = await axios.post(`${API_BASE}${endpoint}`, payload);
+  const data = res.data;
+
+  // Decrypt response
+  const decryptedStr = await decryptData(data.ciphertext, data.nonce, data.tag, cryptoState.aesKey);
+  return JSON.parse(decryptedStr);
+}
+
+export async function loginCustomer(username: string, pin: string): Promise<any> {
+  const res = await axios.post(`${API_BASE}/customer/auth/login`, {
+    username,
+    password: pin
+  });
+  return res.data;
+}
+
+export async function logoutCustomer(): Promise<any> {
+  const res = await axios.post(`${API_BASE}/customer/auth/logout`);
+  return res.data;
+}
+
+export async function getMe(): Promise<any> {
+  const res = await axios.get(`${API_BASE}/customer/auth/me`);
+  return res.data;
+}
+
+export async function getAccountDetails(cryptoState: CryptoState): Promise<any> {
+  return makeEncryptedRequest('/customer/account', {}, cryptoState);
+}
+
+export async function getStatements(cryptoState: CryptoState): Promise<any> {
+  return makeEncryptedRequest('/customer/statements', {}, cryptoState);
+}
+
+export async function getBeneficiaries(cryptoState: CryptoState): Promise<any> {
+  return makeEncryptedRequest('/customer/beneficiaries', {}, cryptoState);
+}
+
+export async function addBeneficiary(
+  cryptoState: CryptoState,
+  name: string,
+  accountNumber: string,
+  bankName: string
+): Promise<any> {
+  return makeEncryptedRequest(
+    '/customer/beneficiaries',
+    { name, account_number: accountNumber, bank_name: bankName },
+    cryptoState
+  );
+}
+
+export async function transferMoney(
+  cryptoState: CryptoState,
+  amount: number,
+  beneficiaryId: any,
+  isNew: boolean
+): Promise<any> {
+  return makeEncryptedRequest(
+    '/customer/transfer',
+    { amount, beneficiary_id: beneficiaryId, is_new_beneficiary: isNew },
+    cryptoState
+  );
+}
+
+export async function sendTelemetry(
+  sessionId: string,
+  keyVersion: number,
+  aesKey: string,
+  events: any[]
+): Promise<any> {
+  try {
+    const plaintext = JSON.stringify({ events });
+    const encrypted = await encryptData(plaintext, aesKey);
+    const payload = {
+      session_id: sessionId,
+      key_version: keyVersion,
+      ciphertext: encrypted.ciphertext,
+      nonce: encrypted.nonce,
+      tag: encrypted.tag
+    };
+    const res = await axios.post(`${API_BASE}/customer/telemetry`, payload);
+    return res.data;
+  } catch (error) {
+    console.error('Silent telemetry send failed:', error);
+    // Standard failover: send unencrypted if keys are desynced to ensure telemetry is captured
+    try {
+      const res = await axios.post(`${API_BASE}/customer/telemetry`, {
+        session_id: sessionId,
+        events
+      });
+      return res.data;
+    } catch (e) {
+      return null;
+    }
+  }
+}

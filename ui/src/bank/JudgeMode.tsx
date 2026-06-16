@@ -43,9 +43,9 @@ const JudgeMode = ({ onScenarioRun }: JudgeModeProps) => {
         <Gavel size={20} />
         <span>Judge Mode — Scripted Attack Chains</span>
       </h2>
-      <p className="text-sm text-slate-400">
+      <p className="text-sm text-neutral-400">
         Run a complete, server-scripted user journey through the Risk Engine in one click. Each scenario uses a
-        fresh isolated session and replays through <code className="text-slate-300">/evaluate</code> step by step.
+        fresh isolated session and replays through <code className="text-neutral-300">/evaluate</code> step by step.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -67,18 +67,18 @@ const JudgeMode = ({ onScenarioRun }: JudgeModeProps) => {
 
       {activeScenario && steps.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-bold text-slate-400 uppercase">
+          <h3 className="text-sm font-bold text-neutral-400 uppercase">
             Replay: {SCENARIOS.find((s) => s.key === activeScenario)?.label}
           </h3>
           {steps.map((step, i) => (
-            <div key={i} className="bg-slate-900 border border-slate-800 rounded-xl p-3">
+            <div key={i} className="bg-neutral-900 border border-white/5 rounded-xl p-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-slate-200">{step.label}</p>
+                <p className="text-sm text-neutral-200">{step.label}</p>
                 <span className={`text-xs font-mono font-bold ${LEVEL_TEXT[step.result.escalation_level]}`}>
                   {step.result.decision} ({(step.result.overall_risk * 100).toFixed(0)})
                 </span>
               </div>
-              <p className="text-xs text-slate-500 mt-1">{step.result.why_decision}</p>
+              <p className="text-xs text-neutral-500 mt-1">{step.result.why_decision}</p>
             </div>
           ))}
         </div>

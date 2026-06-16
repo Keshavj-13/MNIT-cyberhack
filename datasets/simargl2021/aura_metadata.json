@@ -1,0 +1,22 @@
+{
+    "dataset_story": "The RoEduNet-SIMARGL2021 dataset captures network intrusion attempts across a realistic academic network. It is used in AURA to detect environment-level threats.",
+    "aura_purpose": "Detects malicious network environments, such as TOR exit nodes or VPN-based masking.",
+    "risk_mapping": {
+        "Behavioral Risk": "Not Used",
+        "Device Risk": "Secondary",
+        "Environment Risk": "Primary",
+        "Transaction Risk": "Not Used",
+        "Failure Risk": "Not Used",
+        "Intent Risk": "Not Used"
+    },
+    "overview": {
+        "name": "Simargl2021",
+        "domain": "Threat Detection",
+        "source": "https://huggingface.co/datasets/shivamjaisingh/SIMARGL2021-Intrusion-Detection-Systems",
+        "license": "CC BY-SA 4.0",
+        "data_type": "Synthetic"
+    },
+    "citation": {
+        "text": "Mihailescu, M. E., et al. (2021). The Proposition and Evaluation of the RoEduNet-SIMARGL2021 Network Intrusion Detection Dataset. Sensors."
+    }
+}

@@ -1,12 +1,26 @@
 {
+    "accuracy": 0.992483660130719,
+    "precision": 0.8490566037735849,
+    "recall": 0.75,
+    "f1": 0.7964601769911505,
+    "roc_auc": 0.9974722222222222,
+    "pr_auc": 0.8957204587695009,
+    "r_squared": 0.6876472786693473,
+    "mcfadden_r2": 0.7940578498254938,
+    "brier_score": 0.0060044736895550335,
+    "n_train": 14280,
+    "n_test": 3060,
+    "decision_threshold": 0.75,
+    "best_params": {
+        "subsample": 0.8,
+        "n_estimators": 200,
+        "max_depth": 4,
+        "learning_rate": 0.1,
+        "colsample_bytree": 0.8
+    },
+    "calibration": "Platt (logistic on logit)",
+    "model_type": "XGBoost",
     "provider": "AccountTakeover",
-    "dataset": "Africa Social Media ATO",
-    "model": "XGBoost",
-    "accuracy": 1.0,
-    "precision": 1.0,
-    "recall": 1.0,
-    "f1": 1.0,
-    "roc_auc": 1.0,
-    "pr_auc": 1.0,
-    "train_time": 0.402483
+    "dataset": "CMU CMU Keystroke Dynamics (DSL-StrongPasswordData, full 20400 rows)",
+    "model": "XGBoost (tuned) + Platt calibration"
 }

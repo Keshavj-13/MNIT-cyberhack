@@ -1,0 +1,31 @@
+{
+    "dataset_story": "The CERT Insider Threat dataset provides a multi-source collection of synthetic enterprise activity logs. It is used in AURA to model trust decay and internal employee risk escalation.",
+    "aura_purpose": "Used to model trust decay, privilege escalation, and anomalous employee behavior patterns.",
+    "risk_mapping": {
+        "Behavioral Risk": "Primary",
+        "Device Risk": "Secondary",
+        "Environment Risk": "Not Used",
+        "Transaction Risk": "Not Used",
+        "Failure Risk": "Primary",
+        "Intent Risk": "Secondary"
+    },
+    "overview": {
+        "name": "CERT Insider Threat",
+        "domain": "Insider Risk / UEBA",
+        "source": "https://kilthub.cmu.edu/articles/dataset/Insider_Threat_Test_Dataset/12841247",
+        "license": "CC BY 4.0",
+        "data_type": "Synthetic"
+    },
+    "citation": {
+        "text": "Glasser, J., & Lindauer, B. (2013). Bridging the gap: A pragmatic approach to generating insider threat data. IEEE Security and Privacy Workshops."
+    },
+    "feature_dictionary": {
+        "user": {"description": "Unique identifier for the employee"},
+        "pc": {"description": "Computer identifier where the activity occurred"},
+        "activity": {"description": "Action performed (Logon, Logoff, Connect, Disconnect, etc.)"}
+    },
+    "feature_groups": {
+        "Entity": ["user", "pc"],
+        "Activity": ["activity"]
+    }
+}

@@ -1,0 +1,56 @@
+{
+    "dataset_story": "AMLSim is a multi-agent simulator designed to generate synthetic financial transactions for Anti-Money Laundering (AML) research, modeling both normal and laundering behaviors.",
+    "aura_purpose": "Trains detection engines to identify complex laundering topologies and high-risk transaction chains.",
+    "risk_mapping": {
+        "Behavioral Risk": "Not Used",
+        "Device Risk": "Not Used",
+        "Environment Risk": "Not Used",
+        "Transaction Risk": "Primary",
+        "Failure Risk": "Not Used",
+        "Intent Risk": "Secondary"
+    },
+    "overview": {
+        "name": "AMLSim",
+        "domain": "Threat Detection",
+        "source": "https://github.com/IBM/AMLSim",
+        "license": "Apache 2.0",
+        "data_type": "Synthetic",
+        "title": "Anti-Money Laundering Simulator"
+    },
+    "citation": {
+        "text": "Suzumura & Kanezashi (2019). AMLSim: An Anti-Money Laundering Simulator."
+    },
+    "feature_dictionary": {
+        "step": {
+            "description": "Discrete time unit of the simulation"
+        },
+        "amount": {
+            "description": "Financial value of the transaction",
+            "units": "Currency"
+        },
+        "type": {
+            "description": "Transaction mechanism (e.g., TRANSFER, CASH-IN, CASH-OUT)"
+        },
+        "is_sar": {
+            "description": "Indicator of Suspicious Activity Report (SAR), marking laundering activity",
+            "allowed_values": "0, 1"
+        }
+    },
+    "feature_groups": {
+        "Temporal": [
+            "step"
+        ],
+        "Financial": [
+            "amount",
+            "type",
+            "currency"
+        ],
+        "Parties": [
+            "orig_id",
+            "dest_id"
+        ],
+        "Labels": [
+            "is_sar"
+        ]
+    }
+}

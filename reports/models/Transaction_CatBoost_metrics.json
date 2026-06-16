@@ -1,12 +1,18 @@
 {
+    "accuracy": 0.9802133333333334,
+    "precision": 0.20980565371024734,
+    "recall": 0.2871825876662636,
+    "f1": 0.24247064828994386,
+    "roc_auc": 0.9028664783176023,
+    "pr_auc": 0.17629313438608768,
+    "r_squared": 0.04096737858321442,
+    "mcfadden_r2": 0.12329878751759527,
+    "brier_score": 0.010458326777181007,
+    "n_train": 700000,
+    "n_test": 150000,
+    "decision_threshold": 0.2,
+    "calibration": "Platt (logistic on logit)",
     "provider": "Transaction",
-    "dataset": "ULB Credit Card",
-    "model": "CatBoost",
-    "accuracy": 0.9995962220427653,
-    "precision": 0.9518072289156626,
-    "recall": 0.8061224489795918,
-    "f1": 0.8729281767955801,
-    "roc_auc": 0.974814774671827,
-    "pr_auc": 0.8631072365129606,
-    "train_time": 5.124397
+    "dataset": "Feedzai BAF (Base, full 1M rows)",
+    "model": "XGBoost (tuned) + Platt calibration"
 }

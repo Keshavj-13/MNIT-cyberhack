@@ -1,0 +1,66 @@
+{
+    "dataset_story": "A comprehensive survey of account takeover incidents across African social media platforms, documenting attack vectors, platform responses, and user impacts.",
+    "aura_purpose": "Used to model multi-stage account takeover (ATO) risk and identify regional attack patterns.",
+    "risk_mapping": {
+        "Behavioral Risk": "Primary",
+        "Device Risk": "Secondary",
+        "Environment Risk": "Not Used",
+        "Transaction Risk": "Not Used",
+        "Failure Risk": "Not Used",
+        "Intent Risk": "Secondary"
+    },
+    "overview": {
+        "name": "Africa Social Media ATO",
+        "domain": "Threat Detection",
+        "source": "https://huggingface.co/datasets/electricsheepafrica/africa-social-media-account-takeover",
+        "license": "CC BY 4.0",
+        "data_type": "Real-world Survey",
+        "title": "Africa Social Media Account Takeover Survey Dataset"
+    },
+    "citation": {
+        "text": "Udodi (2025). Africa Social Media Account Takeover Survey Dataset. NeurIPS."
+    },
+    "feature_dictionary": {
+        "attack_type": {
+            "description": "Specific method used for account takeover (e.g., Phishing, SIM Swap, Session Hijack)"
+        },
+        "platform": {
+            "description": "Social media platform where the incident occurred"
+        },
+        "monetisation_method": {
+            "description": "How the attacker intended to profit (e.g., Crypto, Mobile Money, Ransom)"
+        },
+        "compromise_score": {
+            "description": "Calculated score indicating the depth of account compromise"
+        },
+        "label": {
+            "description": "Binary indicator of successful account takeover",
+            "allowed_values": "0, 1"
+        }
+    },
+    "feature_groups": {
+        "Incident": [
+            "attack_type",
+            "platform",
+            "victim_type",
+            "threat_actor"
+        ],
+        "Technical": [
+            "password_reused",
+            "no_mfa",
+            "phishing_link_clicked",
+            "sim_swap_used",
+            "session_cookie_stolen"
+        ],
+        "Impact": [
+            "amount_lost_usd",
+            "account_suspended",
+            "reputation_damaged",
+            "mental_health_impact"
+        ],
+        "Labels": [
+            "label",
+            "is_synthetic"
+        ]
+    }
+}

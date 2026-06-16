@@ -1,0 +1,22 @@
+{
+    "dataset_story": "This dataset tracks the timing of keypresses for users typing a specific password. It provides the baseline for behavioral identity verification in AURA.",
+    "aura_purpose": "Powers the Behavioral Risk provider by verifying if the typing pattern matches the authorized user.",
+    "risk_mapping": {
+        "Behavioral Risk": "Primary",
+        "Device Risk": "Not Used",
+        "Environment Risk": "Not Used",
+        "Transaction Risk": "Not Used",
+        "Failure Risk": "Not Used",
+        "Intent Risk": "Not Used"
+    },
+    "overview": {
+        "name": "Cmu Keystroke",
+        "domain": "Threat Detection",
+        "source": "https://www.cs.cmu.edu/~keystroke/DSL-StrongPasswordData.csv",
+        "license": "CC BY-NC 3.0",
+        "data_type": "Synthetic"
+    },
+    "citation": {
+        "text": "Killourhy, K. S., & Maxion, R. A. (2009). Comparing Anomaly-Detection Algorithms for Keystroke Dynamics. In IEEE/IFIP International Conference on Dependable Systems & Networks (DSN)."
+    }
+}

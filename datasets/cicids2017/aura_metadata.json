@@ -1,0 +1,31 @@
+{
+    "dataset_story": "CICIDS2017 is a comprehensive network traffic dataset capturing common attacks and benign traffic. In AURA, it is primarily used to identify DDoS attempts and infrastructure masking.",
+    "aura_purpose": "Detects large-scale network-level threats and identifies malicious infrastructure environments.",
+    "risk_mapping": {
+        "Behavioral Risk": "Not Used",
+        "Device Risk": "Secondary",
+        "Environment Risk": "Primary",
+        "Transaction Risk": "Not Used",
+        "Failure Risk": "Not Used",
+        "Intent Risk": "Not Used"
+    },
+    "overview": {
+        "name": "CICIDS2017 DDoS",
+        "domain": "Network Security",
+        "source": "https://www.unb.ca/cic/datasets/ids-2017.html",
+        "license": "CC BY-NC-SA 4.0",
+        "data_type": "Real"
+    },
+    "citation": {
+        "text": "Sharafaldin, I., et al. (2018). Toward Generating a New Intrusion Detection Dataset and Intrusion Traffic Characterization. ICISSP."
+    },
+    "feature_dictionary": {
+        "Destination Port": {"description": "Destination port of the flow"},
+        "Flow Duration": {"description": "Total duration of the network flow"},
+        "Label": {"description": "Traffic category (BENIGN, DDoS, etc.)"}
+    },
+    "feature_groups": {
+        "Network Profile": ["Destination Port", "Flow Duration"],
+        "Label": ["Label"]
+    }
+}

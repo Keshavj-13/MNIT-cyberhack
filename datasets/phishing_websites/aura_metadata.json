@@ -1,0 +1,33 @@
+{
+    "dataset_story": "This dataset provides a set of hand-crafted features extracted from website HTML and URLs to identify phishing attempts. AURA uses it to feed the Phishing Risk provider.",
+    "aura_purpose": "Used to identify malicious landing pages and credential harvesting sites.",
+    "risk_mapping": {
+        "Behavioral Risk": "Not Used",
+        "Device Risk": "Not Used",
+        "Environment Risk": "Secondary",
+        "Transaction Risk": "Not Used",
+        "Failure Risk": "Not Used",
+        "Intent Risk": "Primary"
+    },
+    "overview": {
+        "name": "Phishing Websites",
+        "domain": "Social Engineering",
+        "source": "https://archive.ics.uci.edu/dataset/227/phishing+websites",
+        "license": "Open Access",
+        "data_type": "Real"
+    },
+    "citation": {
+        "text": "Mohammad, R. M., et al. (2012). An assessment of features related to phishing websites using an automated technique."
+    },
+    "feature_dictionary": {
+        "having_IP_Address": {"description": "Whether the URL contains an IP address"},
+        "URL_Length": {"description": "Total length of the URL string"},
+        "SSLfinal_State": {"description": "HTTPS/SSL certificate validation state"},
+        "Result": {"description": "Target label (-1: Phishing, 1: Legitimate)"}
+    },
+    "feature_groups": {
+        "URL Features": ["having_IP_Address", "URL_Length"],
+        "Security Features": ["SSLfinal_State"],
+        "Label": ["Result"]
+    }
+}

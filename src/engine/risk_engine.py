@@ -52,27 +52,54 @@ class RiskEngine:
 
     def evaluate_all(self, input_data: Dict[str, Any], history: List[SessionEvent] = []) -> EngineResult:
         results = {}
-        total_score = 0.0
+        weighted_score = 0.0
         total_weight = 0.0
         weighted_conf = 0.0
         
+        # 1. Contextual Weight Adjustment
+        # Boost Transaction weight if it's a high-value or new-beneficiary action
+        current_weights = self.weights.copy()
+        if input_data.get("amount", 0) > 5000 or input_data.get("is_new_beneficiary"):
+            if "TransactionRiskProvider" in current_weights:
+                current_weights["TransactionRiskProvider"] *= 1.5
+        
+        # Re-normalize adjusted weights
+        w_sum = sum(current_weights.values())
+        if w_sum > 0:
+            current_weights = {k: v / w_sum for k, v in current_weights.items()}
+
+        # 2. Evaluate all providers
+        contributions = []
         for provider in self.providers:
             res = provider.evaluate(input_data)
             name = provider.__class__.__name__
             results[name] = res
             
-            weight = self.weights.get(name, 0.05)
-            total_score += res.risk_score * weight
-            total_weight += weight
+            weight = current_weights.get(name, 0.0)
+            weighted_score += res.risk_score * weight
             weighted_conf += res.confidence * weight
+            contributions.append((name, res.risk_score * weight))
             
-        base_score = total_score / total_weight if total_weight > 0 else 0.0
-        avg_conf = weighted_conf / total_weight if total_weight > 0 else 0.0
+        # 3. Explainability: Identify Primary Driver
+        contributions.sort(key=lambda x: x[1], reverse=True)
+        primary_driver, primary_impact = contributions[0] if contributions else ("None", 0.0)
         
-        # Stateful Correlation Logic
-        final_score, correlation_expl = self._apply_correlation(base_score, results, history)
+        # 4. Confidence Adjustment
+        # If the primary driver has low confidence, penalize overall confidence
+        primary_res = results.get(primary_driver)
+        final_conf = weighted_conf
+        if primary_res and primary_res.confidence < 0.5 and primary_res.risk_score > 0.5:
+            final_conf *= (1.0 - (primary_res.risk_score * 0.5))
+
+        # 5. Stateful Correlation (Attack Chain Multipliers)
+        final_score, correlation_expl = self._apply_correlation(weighted_score, results, history)
         
-        return self._make_decision(final_score, avg_conf, results, correlation_expl)
+        # 6. Final Decision Logic
+        summary_expl = f"Primary risk factor: {primary_driver} (Impact: {primary_impact:.2f})."
+        if correlation_expl:
+            summary_expl = f"{correlation_expl} {summary_expl}"
+            
+        return self._make_decision(final_score, final_conf, results, summary_expl)
 
     def _apply_correlation(self, base_score: float, current_results: Dict[str, RiskResult], history: List[SessionEvent]) -> tuple:
         score = base_score

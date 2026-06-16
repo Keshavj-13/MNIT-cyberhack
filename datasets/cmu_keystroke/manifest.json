@@ -1,0 +1,9 @@
+{
+    "source_url": "https://www.cs.cmu.edu/~keystroke/DSL-StrongPasswordData.csv",
+    "download_date": "2026-06-14T13:09:08.179741",
+    "checksum": "b11d23538b1865fa6ecf4e8b78567caa312e9c1027604bb022fcc6ad7eaa7a33",
+    "file_size": 4669935,
+    "license": "CC BY-NC 3.0",
+    "citation": "Killourhy, K. S., & Maxion, R. A. (2009). Comparing Anomaly-Detection Algorithms for Keystroke Dynamics. In IEEE/IFIP International Conference on Dependable Systems & Networks (DSN).",
+    "status": "COMPLETED"
+}
