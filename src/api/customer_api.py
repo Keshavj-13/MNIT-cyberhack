@@ -13,7 +13,7 @@ from typing import Dict, Any, List, Optional, Tuple
 import uvicorn
 import secrets
 
-from src.db.models import SessionLocal, init_db, TelemetryData, CustomerSession, SecurityEvent, User, OTPVerification
+from src.db.models import SessionLocal, init_db, TelemetryData, CustomerSession, SecurityEvent, User, OTPVerification, Transaction, LedgerEntry, Beneficiary
 from src.api.internal.session_crypto import (
     generate_aes_key, encrypt_aes_gcm, decrypt_aes_gcm,
     create_jwt_token, verify_jwt_token, JWT_SECRETS
@@ -201,6 +201,17 @@ def register(payload: Dict[str, str] = Body(...), db: Session = Depends(get_db))
         raise HTTPException(status_code=409, detail="Email is already registered.")
     if db.query(User).filter(User.phone == phone).first():
         raise HTTPException(status_code=409, detail="Phone number is already registered.")
+        
+    # Generate unique banking_id
+    sys_rand = secrets.SystemRandom()
+    while True:
+        random_digits = "".join([str(sys_rand.randint(0, 9)) for _ in range(8)])
+        banking_id = f"CBI-{random_digits}"
+        if not db.query(User).filter(User.banking_id == banking_id).first():
+            break
+            
+    # Generate random initial balance (e.g., between 500.00 and 50000.00)
+    initial_balance = round(sys_rand.uniform(500.0, 50000.0), 2)
     
     # Create user
     user = User(
@@ -210,7 +221,9 @@ def register(payload: Dict[str, str] = Body(...), db: Session = Depends(get_db))
         password_hash=hash_password(password),
         email_verified=False,
         phone_verified=False,
-        is_active=True
+        is_active=True,
+        banking_id=banking_id,
+        balance=initial_balance
     )
     db.add(user)
     db.commit()
@@ -220,7 +233,9 @@ def register(payload: Dict[str, str] = Body(...), db: Session = Depends(get_db))
         "message": "Account created. Please verify your email and phone number.",
         "username": username,
         "email": email,
-        "phone": phone
+        "phone": phone,
+        "banking_id": banking_id,
+        "balance": initial_balance
     }
 
 @app.post("/customer/auth/send-otp")
@@ -448,62 +463,85 @@ def me(user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
         "key_version": cust_session.key_version
     }
 
-# Mock Database for Banking Details
-MOCK_ACCOUNTS = {
-    "checking": {"account_number": "TR-98234827493", "routing_number": "121000248", "balance": 12450.84},
-    "savings": {"account_number": "TR-10293847562", "routing_number": "121000248", "balance": 45102.10}
-}
-
-MOCK_TRANSACTIONS = [
-    {"id": 1, "date": "2026-06-15T10:30:00", "description": "Grocery Store Checkout", "amount": -78.45, "type": "debit"},
-    {"id": 2, "date": "2026-06-14T08:15:00", "description": "Monthly Salary Deposit", "amount": 3500.00, "type": "credit"},
-    {"id": 3, "date": "2026-06-12T14:45:00", "description": "Electricity Utility Bill", "amount": -120.00, "type": "debit"},
-    {"id": 4, "date": "2026-06-10T19:00:00", "description": "Online Bookstore Payment", "amount": -42.10, "type": "debit"},
-]
-
-MOCK_BENEFICIARIES = [
-    {"id": 1, "name": "Alice Smith", "account_number": "TR-47392847293", "bank_name": "Garanti BBVA"},
-    {"id": 2, "name": "Bob Johnson", "account_number": "TR-10293847583", "bank_name": "Isbank"}
-]
-
 @app.post("/customer/account")
-def get_account_details(payload: EncryptedPayload = Body(...), user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
-    # Decrypt request parameters (none expected, but verify crypto)
+def get_account_details(payload: EncryptedPayload = Body(...), user_payload = Depends(get_current_user_payload), db: Session = Depends(get_db)):
     _, cust_session = decrypt_payload(payload, db)
     
-    # Return encrypted accounts data
-    return encrypt_response(MOCK_ACCOUNTS, cust_session)
+    username = user_payload.get("sub")
+    user = db.query(User).filter(User.username == username).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    accounts = {
+        "checking": {
+            "account_number": user.banking_id,
+            "routing_number": "121000248",
+            "balance": user.balance
+        },
+        "savings": {
+            "account_number": user.banking_id,
+            "routing_number": "121000248",
+            "balance": 0.0
+        }
+    }
+    
+    return encrypt_response(accounts, cust_session)
 
 @app.post("/customer/statements")
-def get_statements(payload: EncryptedPayload = Body(...), user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
+def get_statements(payload: EncryptedPayload = Body(...), user_payload = Depends(get_current_user_payload), db: Session = Depends(get_db)):
     _, cust_session = decrypt_payload(payload, db)
     
-    # Return encrypted transactions
-    return encrypt_response(MOCK_TRANSACTIONS, cust_session)
+    username = user_payload.get("sub")
+    db_user = db.query(User).filter(User.username == username).first()
+    
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    ledger_entries = db.query(LedgerEntry).filter(
+        LedgerEntry.user_id == db_user.id
+    ).order_by(LedgerEntry.created_at.desc()).limit(50).all()
+    
+    transactions = []
+    for entry in ledger_entries:
+        transactions.append({
+            "id": entry.id,
+            "date": entry.created_at.isoformat(),
+            "description": entry.description or "Transaction",
+            "amount": entry.amount,
+            "type": "credit" if entry.amount > 0 else "debit",
+            "running_balance": entry.running_balance
+        })
+        
+    return encrypt_response(transactions, cust_session)
 
 @app.post("/customer/beneficiaries")
-def get_beneficiaries(payload: EncryptedPayload = Body(...), user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
+def manage_beneficiaries(payload: EncryptedPayload = Body(...), user_payload = Depends(get_current_user_payload), db: Session = Depends(get_db)):
     decrypted_body, cust_session = decrypt_payload(payload, db)
     
-    # If it's a GET operation disguised as POST (decrypted_body is empty), return list
-    # If it contains name/account/bank, add new beneficiary and run silent evaluation
+    username = user_payload.get("sub")
+    db_user = db.query(User).filter(User.username == username).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
     if decrypted_body and "name" in decrypted_body:
-        name = decrypted_body["name"]
-        account_number = decrypted_body["account_number"]
-        bank_name = decrypted_body["bank_name"]
+        # Add new beneficiary
+        name = decrypted_body.get("name")
+        account_number = decrypted_body.get("account_number")
+        bank_name = decrypted_body.get("bank_name")
         
-        # In-memory append for this session's context
-        new_beneficiary = {
-            "id": len(MOCK_BENEFICIARIES) + 1,
-            "name": name,
-            "account_number": account_number,
-            "bank_name": bank_name
-        }
-        MOCK_BENEFICIARIES.append(new_beneficiary)
+        new_beneficiary = Beneficiary(
+            user_id=db_user.id,
+            name=name,
+            account_number=account_number,
+            bank_name=bank_name
+        )
+        db.add(new_beneficiary)
+        db.commit()
+        db.refresh(new_beneficiary)
         
-        # Trigger silent evaluation to see if adding payee is an anomaly
         eval_payload = {
-            "user_id": user.get("sub"),
+            "user_id": username,
             "session_id": cust_session.session_id,
             "is_new_beneficiary": True,
             "beneficiary_name": name,
@@ -511,13 +549,11 @@ def get_beneficiaries(payload: EncryptedPayload = Body(...), user = Depends(get_
         }
         eval_result = run_evaluation(eval_payload, db)
         
-        # Key rotation check
         key_rotated = False
         new_key = None
         new_version = cust_session.key_version
         
         if eval_result.escalation_level > cust_session.risk_level:
-            # Shuffle keys!
             new_key, new_version = shuffle_session_key(cust_session, eval_result.escalation_level, db)
             key_rotated = True
             
@@ -526,7 +562,12 @@ def get_beneficiaries(payload: EncryptedPayload = Body(...), user = Depends(get_
         
         response_data = {
             "status": "success",
-            "beneficiary": new_beneficiary,
+            "beneficiary": {
+                "id": new_beneficiary.id,
+                "name": new_beneficiary.name,
+                "account_number": new_beneficiary.account_number,
+                "bank_name": new_beneficiary.bank_name
+            },
             "transfer_status": status_msg,
             "key_rotated": key_rotated,
             "new_key": new_key,
@@ -535,23 +576,55 @@ def get_beneficiaries(payload: EncryptedPayload = Body(...), user = Depends(get_
         }
         return encrypt_response(response_data, cust_session)
         
-    return encrypt_response(MOCK_BENEFICIARIES, cust_session)
+    # Return list of beneficiaries
+    beneficiaries = db.query(Beneficiary).filter(Beneficiary.user_id == db_user.id).all()
+    bene_list = [
+        {"id": b.id, "name": b.name, "account_number": b.account_number, "bank_name": b.bank_name}
+        for b in beneficiaries
+    ]
+    
+    return encrypt_response(bene_list, cust_session)
 
-@app.post("/customer/transfer")
-def transfer(payload: EncryptedPayload = Body(...), user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
+@app.post("/customer/transfer/initiate")
+def initiate_transfer(payload: EncryptedPayload = Body(...), user_payload = Depends(get_current_user_payload), db: Session = Depends(get_db)):
     decrypted_body, cust_session = decrypt_payload(payload, db)
     
-    amount = decrypted_body.get("amount", 0.0)
-    beneficiary_id = decrypted_body.get("beneficiary_id")
-    is_new = decrypted_body.get("is_new_beneficiary", False)
+    amount = float(decrypted_body.get("amount", 0.0))
+    target_banking_id = decrypted_body.get("target_banking_id", "").strip()
+    password = decrypted_body.get("password", "")
     
-    # Run evaluation
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Transfer amount must be greater than zero.")
+        
+    sender_username = user_payload.get("sub")
+    sender = db.query(User).filter(User.username == sender_username).first()
+    
+    if not sender:
+        raise HTTPException(status_code=404, detail="Sender not found.")
+        
+    # Verify password
+    if sender.password_hash != hash_password(password):
+        raise HTTPException(status_code=401, detail="Invalid password.")
+        
+    # Verify balance
+    if sender.balance < amount:
+        raise HTTPException(status_code=400, detail="Insufficient funds.")
+        
+    # Look up target receiver
+    receiver = db.query(User).filter(User.banking_id == target_banking_id).first()
+    if not receiver:
+        raise HTTPException(status_code=404, detail="Beneficiary Banking ID not found.")
+    
+    if sender.id == receiver.id:
+        raise HTTPException(status_code=400, detail="Cannot transfer funds to yourself.")
+        
+    # Optional Threat Evaluation
     eval_payload = {
-        "user_id": user.get("sub"),
+        "user_id": sender_username,
         "session_id": cust_session.session_id,
         "amount": amount,
-        "is_new_beneficiary": is_new,
-        "action": "transfer"
+        "is_new_beneficiary": True,
+        "action": "transfer_initiate"
     }
     eval_result = run_evaluation(eval_payload, db)
     
@@ -559,35 +632,140 @@ def transfer(payload: EncryptedPayload = Body(...), user = Depends(get_current_u
     key_rotated = False
     new_key = None
     new_version = cust_session.key_version
-    
     if eval_result.escalation_level > cust_session.risk_level:
-        # Shuffle keys!
         new_key, new_version = shuffle_session_key(cust_session, eval_result.escalation_level, db)
         key_rotated = True
-        
-    # Standardised response messages, absolutely no scores or internal metadata.
-    if eval_result.escalation_level == 1:
-        status = "approved"
-        msg = "Transfer submitted successfully."
-        # Update checking balance
-        MOCK_ACCOUNTS["checking"]["balance"] -= amount
-    elif eval_result.escalation_level == 2:
-        status = "challenged"
-        msg = "We need to verify this transfer. A Step-up Verification (OTP) code has been sent to your registered phone."
-    elif eval_result.escalation_level == 3:
-        status = "restricted"
-        msg = "This transfer exceeds your current session cryptographic limits. Transfer restricted."
-    else:
-        status = "blocked"
-        msg = "Security containment activated. Cryptographic session keys revoked. Access terminated."
-        
+
+    if eval_result.escalation_level >= 3:
+        raise HTTPException(status_code=403, detail="Security containment activated. Transfer restricted.")
+    
+    # Create PENDING Transaction
+    tx = Transaction(
+        sender_id=sender.id,
+        receiver_banking_id=target_banking_id,
+        receiver_id=receiver.id,
+        amount=amount,
+        status="PENDING"
+    )
+    db.add(tx)
+    db.commit()
+    
+    # Generate OTP
+    otp_code = str(secrets.SystemRandom().randint(100000, 999999))
+    otp_record = OTPVerification(
+        identifier=sender.email,
+        otp_hash=hash_otp(otp_code),
+        channel="email",
+        purpose="transfer",
+        transaction_id=tx.id,
+        attempts=0,
+        is_used=False
+    )
+    db.add(otp_record)
+    db.commit()
+    
+    # Send Email OTP
+    send_email_otp(sender.email, otp_code)
+    
     response_data = {
-        "status": status,
-        "message": msg,
+        "status": "success",
+        "message": "Transfer initiated. Step-up Verification (OTP) code sent to your registered email.",
+        "transaction_id": tx.id,
         "key_rotated": key_rotated,
         "new_key": new_key,
         "new_key_version": new_version,
         "risk_level": eval_result.escalation_level
+    }
+    
+    return encrypt_response(response_data, cust_session)
+
+@app.post("/customer/transfer/confirm")
+def confirm_transfer(payload: EncryptedPayload = Body(...), user_payload = Depends(get_current_user_payload), db: Session = Depends(get_db)):
+    decrypted_body, cust_session = decrypt_payload(payload, db)
+    
+    transaction_id = decrypted_body.get("transaction_id")
+    otp_code = decrypted_body.get("otp", "").strip()
+    
+    if not transaction_id or not otp_code:
+        raise HTTPException(status_code=400, detail="Transaction ID and OTP are required.")
+        
+    sender_username = user_payload.get("sub")
+    sender = db.query(User).filter(User.username == sender_username).first()
+    
+    # Find PENDING transaction
+    tx = db.query(Transaction).filter(
+        Transaction.id == transaction_id, 
+        Transaction.sender_id == sender.id,
+        Transaction.status == "PENDING"
+    ).first()
+    
+    if not tx:
+        raise HTTPException(status_code=404, detail="Pending transaction not found or already processed.")
+        
+    # Verify OTP
+    otp_record = db.query(OTPVerification).filter(
+        OTPVerification.transaction_id == tx.id,
+        OTPVerification.identifier == sender.email,
+        OTPVerification.purpose == "transfer",
+        OTPVerification.is_used == False
+    ).order_by(OTPVerification.created_at.desc()).first()
+    
+    if not otp_record:
+        raise HTTPException(status_code=404, detail="No pending verification found for this transaction.")
+        
+    # Check expiry (10 mins)
+    elapsed = (datetime.datetime.utcnow() - otp_record.created_at).total_seconds()
+    if elapsed > 600:
+        otp_record.is_used = True
+        tx.status = "FAILED"
+        db.commit()
+        raise HTTPException(status_code=410, detail="Verification code expired. Transfer cancelled.")
+        
+    if otp_record.attempts >= 5:
+        otp_record.is_used = True
+        tx.status = "FAILED"
+        db.commit()
+        raise HTTPException(status_code=429, detail="Too many incorrect attempts. Transfer cancelled.")
+        
+    if hash_otp(otp_code) != otp_record.otp_hash:
+        otp_record.attempts += 1
+        db.commit()
+        remaining = 5 - otp_record.attempts
+        raise HTTPException(status_code=400, detail=f"Invalid code. {remaining} attempt(s) remaining.")
+        
+    # OTP Valid -> Execute Transfer
+    otp_record.is_used = True
+    tx.status = "COMPLETED"
+    
+    receiver = db.query(User).filter(User.id == tx.receiver_id).first()
+    
+    sender.balance -= tx.amount
+    receiver.balance += tx.amount
+    
+    # Ledger Entries
+    sender_ledger = LedgerEntry(
+        transaction_id=tx.id,
+        user_id=sender.id,
+        amount=-tx.amount,
+        running_balance=sender.balance,
+        description=f"Transfer to CBI ID: {receiver.banking_id}"
+    )
+    
+    receiver_ledger = LedgerEntry(
+        transaction_id=tx.id,
+        user_id=receiver.id,
+        amount=tx.amount,
+        running_balance=receiver.balance,
+        description=f"Transfer from CBI ID: {sender.banking_id}"
+    )
+    
+    db.add(sender_ledger)
+    db.add(receiver_ledger)
+    db.commit()
+    
+    response_data = {
+        "status": "success",
+        "message": "Transfer completed successfully."
     }
     
     return encrypt_response(response_data, cust_session)

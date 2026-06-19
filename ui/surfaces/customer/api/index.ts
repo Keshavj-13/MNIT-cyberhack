@@ -110,15 +110,27 @@ export async function addBeneficiary(
   );
 }
 
-export async function transferMoney(
+export async function initiateTransfer(
   cryptoState: CryptoState,
   amount: number,
-  beneficiaryId: any,
-  isNew: boolean
+  targetBankingId: string,
+  password: string
 ): Promise<any> {
   return makeEncryptedRequest(
-    '/customer/transfer',
-    { amount, beneficiary_id: beneficiaryId, is_new_beneficiary: isNew },
+    '/customer/transfer/initiate',
+    { amount, target_banking_id: targetBankingId, password },
+    cryptoState
+  );
+}
+
+export async function confirmTransfer(
+  cryptoState: CryptoState,
+  transactionId: number,
+  otp: string
+): Promise<any> {
+  return makeEncryptedRequest(
+    '/customer/transfer/confirm',
+    { transaction_id: transactionId, otp },
     cryptoState
   );
 }

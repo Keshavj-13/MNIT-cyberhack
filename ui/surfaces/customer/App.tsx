@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { 
   loginCustomer, logoutCustomer, getAccountDetails, 
-  getStatements, getBeneficiaries, addBeneficiary, transferMoney,
+  getStatements, getBeneficiaries, addBeneficiary, initiateTransfer, confirmTransfer,
   registerCustomer, sendOTP, verifyOTP, getMe
 } from './api';
 import { useTelemetry } from './hooks/useTelemetry';
@@ -118,6 +118,9 @@ export default function App() {
 
   // Transfer form state
   const [transferAmount, setTransferAmount] = useState('');
+  const [targetBankingId, setTargetBankingId] = useState('');
+  const [transferPassword, setTransferPassword] = useState('');
+  const [pendingTxId, setPendingTxId] = useState(0);
   const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState('');
   const [transferStatus, setTransferStatus] = useState<any>(null); // { status: string, message: string }
   const [isTransferring, setIsTransferring] = useState(false);
@@ -155,6 +158,7 @@ export default function App() {
   const [regEmailOtp, setRegEmailOtp] = useState('');
   const [regPhoneOtp, setRegPhoneOtp] = useState('');
   const [regOtpError, setRegOtpError] = useState('');
+  const [regBankingId, setRegBankingId] = useState('');
   const [regOtpLoading, setRegOtpLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
@@ -279,7 +283,7 @@ export default function App() {
 
   const handleTransferSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBeneficiaryId || !transferAmount) return;
+    if (!targetBankingId || !transferAmount || !transferPassword) return;
     
     const amountNum = parseFloat(transferAmount);
     if (isNaN(amountNum) || amountNum <= 0) {
@@ -290,34 +294,20 @@ export default function App() {
     setIsTransferring(true);
     setTransferStatus(null);
 
-    // Find if payee is new in this session
-    const selectedPayee = beneficiaries.find(b => String(b.id) === String(selectedBeneficiaryId));
-    const isNew = selectedPayee ? selectedPayee.id > 2 : false; // Mock new payees added during simulation
-
     try {
-      const res = await transferMoney(cryptoState, amountNum, selectedBeneficiaryId, isNew);
+      const res = await initiateTransfer(cryptoState, amountNum, targetBankingId, transferPassword);
       
       // Check if key shuffled
       if (res.key_rotated && res.new_key) {
         animateKeyRotation(res.new_key, res.new_key_version, res.risk_level);
       }
 
-      if (res.status === 'challenged') {
-        // Step-up challenge required. Generate OTP and notify.
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        setSimulatedSmsCode(code);
-        setShowOtpModal(true);
-        // Display toast to simulate SMS arrival
-        setSmsNotification(`OTP Code: ${code} - Verification for transfer request of $${amountNum}`);
-        setTimeout(() => setSmsNotification(null), 10000);
-      } else if (res.status === 'blocked') {
-        setCryptoState(prev => ({ ...prev, riskLevel: 4 }));
-      } else {
-        setTransferStatus({ status: 'approved', message: res.message });
-        setTransferAmount('');
-        setSelectedBeneficiaryId('');
-        setRefreshTrigger(prev => prev + 1);
-      }
+      setPendingTxId(res.transaction_id);
+      setShowOtpModal(true);
+      // Real OTP sent via backend
+      setSmsNotification(`OTP dispatched to your registered email for transferring $${amountNum}`);
+      setTimeout(() => setSmsNotification(null), 10000);
+      
     } catch (err: any) {
       console.error(err);
       if (err.response?.status === 409) {
@@ -330,18 +320,23 @@ export default function App() {
     }
   };
 
-  const handleOtpVerify = (e: React.FormEvent) => {
+  const handleOtpVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otpCode === simulatedSmsCode) {
+    setOtpError('');
+    if (!otpCode) return;
+    
+    try {
+      const res = await confirmTransfer(cryptoState, pendingTxId, otpCode);
       setShowOtpModal(false);
-      setTransferStatus({ status: 'approved', message: "Transfer verified & completed successfully via Step-up OTP." });
+      setTransferStatus({ status: 'approved', message: "Transfer verified & completed successfully." });
       setTransferAmount('');
-      setSelectedBeneficiaryId('');
+      setTargetBankingId('');
+      setTransferPassword('');
       setOtpCode('');
-      setOtpError('');
+      setPendingTxId(0);
       setRefreshTrigger(prev => prev + 1);
-    } else {
-      setOtpError('Invalid cryptographic code. Authentication rejected.');
+    } catch (err: any) {
+      setOtpError(err.response?.data?.detail || 'Authentication rejected.');
     }
   };
 
@@ -419,7 +414,8 @@ export default function App() {
     }
     setRegLoading(true);
     try {
-      await registerCustomer(regUsername, regEmail, regPhone, regPassword);
+      const regRes = await registerCustomer(regUsername, regEmail, regPhone, regPassword);
+      setRegBankingId(regRes.banking_id);
       // Auto-send email OTP
       await sendOTP(regEmail, 'email');
       setRegStep(2);
@@ -481,6 +477,7 @@ export default function App() {
     setRegPassword(''); setRegConfirmPassword('');
     setRegError(''); setRegOtpError('');
     setRegEmailOtp(''); setRegPhoneOtp('');
+    setRegBankingId('');
     setResendCooldown(0);
   };
 
@@ -1396,7 +1393,9 @@ export default function App() {
                           </div>
                           <h3 style={{ color: '#003893', fontSize: '18px', fontWeight: 700, margin: '0 0 8px' }}>Account Verified!</h3>
                           <p style={{ fontSize: '13px', color: '#666', margin: '0 0 20px', lineHeight: 1.5 }}>
-                            Your email and phone have been verified successfully.<br/>You can now sign in with your credentials.
+                            Your account has been created successfully.<br/>
+                            Your secure Banking ID is: <strong style={{ fontSize: '16px', color: '#003893' }}>{regBankingId}</strong><br/>
+                            Please use your credentials to sign in.
                           </p>
                           <button
                             className="cbi-login-submit"
@@ -1604,17 +1603,14 @@ export default function App() {
 
               <form onSubmit={handleTransferSubmit} className="bg-neutral-900 border border-white/[0.06] rounded-xl p-6 space-y-4 shadow-xl">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Select Payee</label>
-                  <select 
-                    value={selectedBeneficiaryId}
-                    onChange={(e) => setSelectedBeneficiaryId(e.target.value)}
-                    className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-teal-500/50"
-                  >
-                    <option value="">-- Choose a Beneficiary --</option>
-                    {beneficiaries.map((b: any) => (
-                      <option key={b.id} value={b.id}>{b.name} ({b.bank_name})</option>
-                    ))}
-                  </select>
+                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Recipient Banking ID</label>
+                  <input 
+                    type="text"
+                    placeholder="e.g. CBI-XXXXXXXX"
+                    value={targetBankingId}
+                    onChange={(e) => setTargetBankingId(e.target.value.toUpperCase())}
+                    className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-teal-500/50 font-mono tracking-widest"
+                  />
                 </div>
 
                 <div className="space-y-1.5">
@@ -1628,16 +1624,27 @@ export default function App() {
                     className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-teal-500/50 font-mono"
                   />
                 </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Account Password</label>
+                  <input 
+                    type="password"
+                    placeholder="Enter your password to authorize"
+                    value={transferPassword}
+                    onChange={(e) => setTransferPassword(e.target.value)}
+                    className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-teal-500/50"
+                  />
+                </div>
 
                 <div className="bg-neutral-950 p-4 rounded-lg border border-white/[0.04] text-[11px] text-neutral-400 space-y-1">
                   <span className="font-semibold text-neutral-300 block mb-1">Cryptographic Policy Notice</span>
                   <p>Upon submission, this request payload is encrypted locally using the active session key (v{cryptoState.keyVersion}).</p>
-                  <p>In accordance with the Threat Engine, transaction evaluation will execute silently. Risk levels may trigger immediate session key shuffling.</p>
+                  <p>In accordance with the Threat Engine, transaction evaluation will execute silently. An OTP step-up verification will be requested via Email.</p>
                 </div>
 
                 <button 
                   type="submit"
-                  disabled={isTransferring || !selectedBeneficiaryId || !transferAmount}
+                  disabled={isTransferring || !targetBankingId || !transferAmount || !transferPassword}
                   className="w-full py-3 bg-teal-500 hover:bg-teal-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
                   {isTransferring ? 'Encrypting & Dispatching...' : 'Secure Transfer'}

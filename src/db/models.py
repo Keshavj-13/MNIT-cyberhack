@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, String, JSON, DateTime, Boolean, create_engine, text
+from sqlalchemy import Column, Integer, Float, String, JSON, DateTime, Boolean, create_engine, text, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import datetime
@@ -63,6 +63,10 @@ class User(Base):
     phone_verified = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    # Banking simulator fields
+    banking_id = Column(String(12), unique=True, index=True, nullable=True)
+    balance = Column(Float, default=0.0)
 
 class OTPVerification(Base):
     __tablename__ = "otp_verifications"
@@ -75,6 +79,40 @@ class OTPVerification(Base):
     attempts = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     is_used = Column(Boolean, default=False)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    receiver_banking_id = Column(String, index=True, nullable=False)
+    receiver_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=True)
+    amount = Column(Float, nullable=False)
+    status = Column(String, default="PENDING")  # PENDING, COMPLETED, FAILED
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class LedgerEntry(Base):
+    __tablename__ = "ledger_entries"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), index=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    amount = Column(Float, nullable=False)
+    running_balance = Column(Float, nullable=False)
+    description = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class Beneficiary(Base):
+    __tablename__ = "beneficiaries"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    name = Column(String, nullable=False)
+    account_number = Column(String, nullable=False)
+    bank_name = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class RevokedToken(Base):
     __tablename__ = "revoked_tokens"
@@ -93,23 +131,36 @@ def init_db():
     _migrate_schema()
 
 def _migrate_schema():
-    """Add columns that existed in the ORM model but predate the live table.
-
-    Base.metadata.create_all() only creates missing tables, it never alters
-    existing ones. security_events was created before user_id/session_id/
-    event_category were added to the ORM model, so those columns are missing
-    from older databases and every /evaluate call fails with
-    'no such column: security_events.user_id'.
-    """
+    """Add columns that existed in the ORM model but predate the live table."""
     migrations = {
-        "user_id": "ALTER TABLE security_events ADD COLUMN user_id VARCHAR DEFAULT 'ANONYMOUS'",
-        "session_id": "ALTER TABLE security_events ADD COLUMN session_id VARCHAR DEFAULT 'DEFAULT'",
-        "event_category": "ALTER TABLE security_events ADD COLUMN event_category VARCHAR DEFAULT 'NEUTRAL'",
+        "security_events": [
+            ("user_id", "ALTER TABLE security_events ADD COLUMN user_id VARCHAR DEFAULT 'ANONYMOUS'"),
+            ("session_id", "ALTER TABLE security_events ADD COLUMN session_id VARCHAR DEFAULT 'DEFAULT'"),
+            ("event_category", "ALTER TABLE security_events ADD COLUMN event_category VARCHAR DEFAULT 'NEUTRAL'"),
+        ],
+        "users": [
+            ("banking_id", "ALTER TABLE users ADD COLUMN banking_id VARCHAR(12)"),
+            ("balance", "ALTER TABLE users ADD COLUMN balance FLOAT DEFAULT 0.0"),
+        ],
+        "otp_verifications": [
+            ("transaction_id", "ALTER TABLE otp_verifications ADD COLUMN transaction_id INTEGER"),
+        ],
+        "transactions": [
+            ("sender_id", "ALTER TABLE transactions ADD COLUMN sender_id INTEGER DEFAULT 0"),
+            ("receiver_banking_id", "ALTER TABLE transactions ADD COLUMN receiver_banking_id VARCHAR DEFAULT ''"),
+            ("receiver_id", "ALTER TABLE transactions ADD COLUMN receiver_id INTEGER DEFAULT 0"),
+            ("created_at", "ALTER TABLE transactions ADD COLUMN created_at DATETIME"),
+            ("updated_at", "ALTER TABLE transactions ADD COLUMN updated_at DATETIME"),
+        ]
     }
     with engine.connect() as conn:
-        existing_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(security_events)"))}
-        for col, ddl in migrations.items():
-            if col not in existing_cols:
-                conn.execute(text(ddl))
+        for table, cols in migrations.items():
+            try:
+                existing_cols = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+                for col, ddl in cols:
+                    if col not in existing_cols:
+                        conn.execute(text(ddl))
+            except Exception:
+                pass  # Table might not exist yet, create_all will handle it
         conn.commit()
 
