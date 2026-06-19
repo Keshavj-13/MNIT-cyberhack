@@ -1,4 +1,10 @@
 import json
+import re
+import os
+import hashlib
+import smtplib
+import datetime
+from email.message import EmailMessage
 from fastapi import FastAPI, Depends, HTTPException, Body, Security, Response, Cookie
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -7,7 +13,7 @@ from typing import Dict, Any, List, Optional, Tuple
 import uvicorn
 import secrets
 
-from src.db.models import SessionLocal, init_db, TelemetryData, CustomerSession, SecurityEvent
+from src.db.models import SessionLocal, init_db, TelemetryData, CustomerSession, SecurityEvent, User, OTPVerification
 from src.api.internal.session_crypto import (
     generate_aes_key, encrypt_aes_gcm, decrypt_aes_gcm,
     create_jwt_token, verify_jwt_token, JWT_SECRETS
@@ -15,6 +21,10 @@ from src.api.internal.session_crypto import (
 from src.api.internal.evaluation_runner import run_evaluation
 
 app = FastAPI(title="MNIT Customer Banking API", version="1.0.0")
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
 # Strict CORS: Allow only Customer frontend port 3001
 app.add_middleware(
@@ -95,14 +105,276 @@ def shuffle_session_key(cust_session: CustomerSession, new_risk_level: int, db: 
 
 from typing import Tuple
 
-# --- Routes ---
+# --- Password Validation ---
+
+def validate_password(password: str) -> Tuple[bool, str]:
+    """Enforce strong password policy: >=14 chars, upper, lower, digit, special."""
+    if len(password) < 14:
+        return False, "Password must be at least 14 characters long."
+    if not re.search(r'[A-Z]', password):
+        return False, "Password must contain at least one uppercase letter."
+    if not re.search(r'[a-z]', password):
+        return False, "Password must contain at least one lowercase letter."
+    if not re.search(r'[0-9]', password):
+        return False, "Password must contain at least one digit."
+    if not re.search(r'[!@#$%^&*()_+\-=\[\]{};\':\"\\|,.<>\/?`~]', password):
+        return False, "Password must contain at least one special character."
+    return True, "Password is strong."
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+def hash_otp(otp: str) -> str:
+    return hashlib.sha256(otp.encode('utf-8')).hexdigest()
+
+# --- OTP Email Sending ---
+
+def send_email_otp(to_email: str, otp_code: str):
+    """Send OTP via SMTP. Falls back to console print if env vars are not set."""
+    smtp_email = os.environ.get("SMTP_EMAIL")
+    smtp_password = os.environ.get("SMTP_PASSWORD")
+    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("SMTP_PORT", "465"))
+    
+    if not smtp_email or not smtp_password:
+        print(f"[EMAIL OTP] To: {to_email} | Code: {otp_code}")
+        return
+    
+    try:
+        msg = EmailMessage()
+        msg.set_content(
+            f"Your Central Bank of India verification code is: {otp_code}\n\n"
+            f"This code expires in 10 minutes. Do not share it with anyone."
+        )
+        msg['Subject'] = f'CBI Verification Code: {otp_code}'
+        msg['From'] = smtp_email
+        msg['To'] = to_email
+        
+        server = smtplib.SMTP_SSL(smtp_host, smtp_port)
+        server.login(smtp_email, smtp_password)
+        server.send_message(msg)
+        server.quit()
+        print(f"[EMAIL OTP] Sent to {to_email}")
+    except Exception as e:
+        print(f"[EMAIL OTP ERROR] {str(e)} — Fallback: Code for {to_email} is {otp_code}")
+
+def send_sms_otp(phone_number: str, otp_code: str):
+    """Simulate SMS OTP delivery by printing to console."""
+    print(f"[SMS OTP] To: {phone_number} | Code: {otp_code}")
+
+# --- Auth Routes ---
+
+@app.post("/customer/auth/register")
+def register(payload: Dict[str, str] = Body(...), db: Session = Depends(get_db)):
+    """Register a new customer account."""
+    username = payload.get("username", "").strip()
+    email = payload.get("email", "").strip().lower()
+    phone = payload.get("phone", "").strip()
+    password = payload.get("password", "")
+    
+    # Validate required fields
+    if not username or not email or not phone or not password:
+        raise HTTPException(status_code=400, detail="All fields (username, email, phone, password) are required.")
+    
+    # Validate username (alphanumeric + underscore, 3-30 chars)
+    if not re.match(r'^[a-zA-Z0-9_]{3,30}$', username):
+        raise HTTPException(status_code=400, detail="Username must be 3-30 characters, alphanumeric and underscores only.")
+    
+    # Validate email format
+    if not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email):
+        raise HTTPException(status_code=400, detail="Invalid email address format.")
+    
+    # Validate phone format (basic check for digits, 10-15 chars)
+    phone_digits = re.sub(r'[^0-9]', '', phone)
+    if len(phone_digits) < 10 or len(phone_digits) > 15:
+        raise HTTPException(status_code=400, detail="Phone number must be 10-15 digits.")
+    
+    # Validate password strength
+    is_valid, message = validate_password(password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=message)
+    
+    # Check uniqueness
+    if db.query(User).filter(User.username == username).first():
+        raise HTTPException(status_code=409, detail="Username is already taken.")
+    if db.query(User).filter(User.email == email).first():
+        raise HTTPException(status_code=409, detail="Email is already registered.")
+    if db.query(User).filter(User.phone == phone).first():
+        raise HTTPException(status_code=409, detail="Phone number is already registered.")
+    
+    # Create user
+    user = User(
+        username=username,
+        email=email,
+        phone=phone,
+        password_hash=hash_password(password),
+        email_verified=False,
+        phone_verified=False,
+        is_active=True
+    )
+    db.add(user)
+    db.commit()
+    
+    return {
+        "status": "success",
+        "message": "Account created. Please verify your email and phone number.",
+        "username": username,
+        "email": email,
+        "phone": phone
+    }
+
+@app.post("/customer/auth/send-otp")
+def send_otp(payload: Dict[str, str] = Body(...), db: Session = Depends(get_db)):
+    """Generate and send an OTP to email or phone."""
+    identifier = payload.get("identifier", "").strip()
+    channel = payload.get("channel", "").strip().lower()
+    
+    if not identifier or channel not in ("email", "phone"):
+        raise HTTPException(status_code=400, detail="Valid identifier and channel (email/phone) required.")
+    
+    # Rate limit: check if there's a recent unexpired OTP for this identifier (within 60s)
+    recent_otp = db.query(OTPVerification).filter(
+        OTPVerification.identifier == identifier,
+        OTPVerification.channel == channel,
+        OTPVerification.is_used == False
+    ).order_by(OTPVerification.created_at.desc()).first()
+    
+    if recent_otp:
+        elapsed = (datetime.datetime.utcnow() - recent_otp.created_at).total_seconds()
+        if elapsed < 60:
+            raise HTTPException(status_code=429, detail=f"Please wait {int(60 - elapsed)} seconds before requesting a new code.")
+    
+    # Generate 6-digit OTP
+    otp_code = str(secrets.SystemRandom().randint(100000, 999999))
+    
+    # Store hashed OTP
+    otp_record = OTPVerification(
+        identifier=identifier,
+        otp_hash=hash_otp(otp_code),
+        channel=channel,
+        purpose="registration",
+        attempts=0,
+        is_used=False
+    )
+    db.add(otp_record)
+    db.commit()
+    
+    # Send the OTP
+    if channel == "email":
+        send_email_otp(identifier, otp_code)
+    else:
+        send_sms_otp(identifier, otp_code)
+    
+    # Mask identifier for response
+    if channel == "email":
+        parts = identifier.split("@")
+        masked = parts[0][:2] + "***@" + parts[1] if len(parts) == 2 else identifier
+    else:
+        masked = identifier[:3] + "****" + identifier[-4:] if len(identifier) > 7 else identifier
+    
+    return {
+        "status": "success",
+        "message": f"Verification code sent to {masked}"
+    }
+
+@app.post("/customer/auth/verify-otp")
+def verify_otp_endpoint(payload: Dict[str, str] = Body(...), db: Session = Depends(get_db)):
+    """Verify a submitted OTP code."""
+    identifier = payload.get("identifier", "").strip()
+    otp_code = payload.get("otp", "").strip()
+    channel = payload.get("channel", "").strip().lower()
+    
+    if not identifier or not otp_code or channel not in ("email", "phone"):
+        raise HTTPException(status_code=400, detail="Identifier, OTP code, and channel are required.")
+    
+    # Find the latest unused OTP for this identifier+channel
+    otp_record = db.query(OTPVerification).filter(
+        OTPVerification.identifier == identifier,
+        OTPVerification.channel == channel,
+        OTPVerification.is_used == False
+    ).order_by(OTPVerification.created_at.desc()).first()
+    
+    if not otp_record:
+        raise HTTPException(status_code=404, detail="No pending verification found. Please request a new code.")
+    
+    # Check expiry (10 minutes)
+    elapsed = (datetime.datetime.utcnow() - otp_record.created_at).total_seconds()
+    if elapsed > 600:
+        otp_record.is_used = True
+        db.commit()
+        raise HTTPException(status_code=410, detail="Verification code has expired. Please request a new one.")
+    
+    # Check max attempts
+    if otp_record.attempts >= 5:
+        otp_record.is_used = True
+        db.commit()
+        raise HTTPException(status_code=429, detail="Too many incorrect attempts. Please request a new code.")
+    
+    # Verify hash
+    if hash_otp(otp_code) != otp_record.otp_hash:
+        otp_record.attempts += 1
+        db.commit()
+        remaining = 5 - otp_record.attempts
+        raise HTTPException(status_code=400, detail=f"Invalid code. {remaining} attempt(s) remaining.")
+    
+    # Success — mark OTP as used
+    otp_record.is_used = True
+    db.commit()
+    
+    # Update the user's verification status
+    if channel == "email":
+        user = db.query(User).filter(User.email == identifier).first()
+        if user:
+            user.email_verified = True
+            db.commit()
+    elif channel == "phone":
+        user = db.query(User).filter(User.phone == identifier).first()
+        if user:
+            user.phone_verified = True
+            db.commit()
+    
+    return {
+        "status": "success",
+        "verified": True,
+        "channel": channel,
+        "message": f"{channel.capitalize()} verified successfully."
+    }
 
 @app.post("/customer/auth/login")
 def login(payload: Dict[str, str] = Body(...), response: Response = Response(), db: Session = Depends(get_db)):
-    username = payload.get("username", "customer_user")
-    password = payload.get("password") # In demo, accept any password
+    """Authenticate a registered user and establish a cryptographic session."""
+    username = payload.get("username", "").strip()
+    password = payload.get("password", "")
     
-    # Establish dynamic session
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Username and password are required.")
+    
+    # Look up user in DB
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+    
+    # Verify password hash
+    if user.password_hash != hash_password(password):
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+    
+    # Check account is active
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account has been deactivated. Contact support.")
+    
+    # Check both email and phone are verified
+    if not user.email_verified or not user.phone_verified:
+        unverified = []
+        if not user.email_verified:
+            unverified.append("email")
+        if not user.phone_verified:
+            unverified.append("phone")
+        raise HTTPException(
+            status_code=403,
+            detail=f"Account verification incomplete. Unverified: {', '.join(unverified)}. Please complete verification first."
+        )
+    
+    # Establish dynamic cryptographic session (existing logic preserved)
     session_id = f"cust_sess_{secrets.token_hex(8)}"
     aes_key = generate_aes_key()
     

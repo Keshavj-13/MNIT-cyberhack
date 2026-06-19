@@ -12,6 +12,10 @@ from src.api.internal.evaluation_runner import run_evaluation
 
 app = FastAPI(title="MNIT Controlled Threat Simulation API", version="1.0.0")
 
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
 # Strict CORS: Allow only Attacker frontend port 3003
 app.add_middleware(
     CORSMiddleware,

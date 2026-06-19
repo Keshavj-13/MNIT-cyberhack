@@ -5,10 +5,34 @@ import {
 } from 'lucide-react';
 import DataVerification from './components/DataVerification';
 import ModelIntelligence from './components/ModelIntelligence';
+import { usePreferences } from './Preferences';
+
+const T: Record<string, any> = {
+  en: {
+    header_title: 'MNIT Threat Inferences Showcase',
+    header_sub: 'Public Documentation & Verified Datasets',
+    tab_datasets: 'Dataset Catalog',
+    tab_models: 'Model Cards',
+    tab_papers: 'Publications',
+    read_only: 'Read-Only Portal',
+  },
+  hi: {
+    header_title: 'एमएनआईटी थ्रेट इनफेरेंस शोकेस',
+    header_sub: 'सार्वजनिक दस्तावेज़ीकरण और सत्यापित डेटासेट',
+    tab_datasets: 'डेटासेट कैटलॉग',
+    tab_models: 'मॉडल कार्ड',
+    tab_papers: 'प्रकाशन',
+    read_only: 'केवल-पठनीय पोर्टल',
+  }
+};
+
 
 const API_BASE = 'http://localhost:8004';
 
 export default function App() {
+  const pref = usePreferences();
+  const t = (key: string) => T[pref.lang][key] || key;
+
   const [activeTab, setActiveTab] = useState('datasets');
   const [papers, setPapers] = useState<any[]>([]);
 
@@ -28,8 +52,8 @@ export default function App() {
             <BookOpen size={20} />
           </div>
           <div>
-            <h1 className="font-bold text-base leading-tight text-white">MNIT Threat Inferences Showcase</h1>
-            <p className="text-[10px] text-neutral-500 font-semibold uppercase tracking-widest font-mono">Public Documentation & Verified Datasets</p>
+            <h1 className="font-bold text-base leading-tight text-white">{t('header_title')}</h1>
+            <p className="text-[10px] text-neutral-500 font-semibold uppercase tracking-widest font-mono">{t('header_sub')}</p>
           </div>
         </div>
 
@@ -44,7 +68,7 @@ export default function App() {
             }`}
           >
             <Database size={14} />
-            <span>Dataset Catalog</span>
+            <span>{t('tab_datasets')}</span>
           </button>
           <button
             onClick={() => setActiveTab('models')}
@@ -55,7 +79,7 @@ export default function App() {
             }`}
           >
             <Cpu size={14} />
-            <span>Model Cards</span>
+            <span>{t('tab_models')}</span>
           </button>
           <button
             onClick={() => setActiveTab('papers')}
@@ -66,13 +90,26 @@ export default function App() {
             }`}
           >
             <BookOpen size={14} />
-            <span>Publications</span>
+            <span>{t('tab_papers')}</span>
           </button>
         </nav>
 
-        <div className="flex items-center space-x-2 bg-neutral-900 border border-white/[0.06] px-3.5 py-1.5 rounded-full text-xs font-mono text-neutral-400">
-          <ShieldCheck size={14} className="text-teal-400" />
-          <span>Read-Only Portal</span>
+        <div className="flex items-center space-x-4">
+          <div className="flex bg-neutral-900 border border-white/[0.06] rounded-lg p-1">
+            <button onClick={() => pref.setFontSize('dec')} className="px-2 text-neutral-400 hover:text-white text-[10px] font-bold">A-</button>
+            <button onClick={() => pref.setFontSize('reset')} className="px-2 text-neutral-400 hover:text-white text-[10px] border-x border-white/[0.06] font-bold">A</button>
+            <button onClick={() => pref.setFontSize('inc')} className="px-2 text-neutral-400 hover:text-white text-[10px] font-bold">A+</button>
+          </div>
+
+          <div className="flex bg-neutral-900 border border-white/[0.06] rounded-lg p-1 text-[10px] font-bold">
+            <button onClick={() => pref.setLang('en')} className={`px-2 py-0.5 rounded ${pref.lang === 'en' ? 'bg-teal-500 text-black' : 'text-neutral-400 hover:text-white'}`}>EN</button>
+            <button onClick={() => pref.setLang('hi')} className={`px-2 py-0.5 rounded ${pref.lang === 'hi' ? 'bg-teal-500 text-black' : 'text-neutral-400 hover:text-white'}`}>HI</button>
+          </div>
+
+          <div className="flex items-center space-x-2 bg-neutral-900 border border-white/[0.06] px-3.5 py-1.5 rounded-full text-xs font-mono text-neutral-400">
+            <ShieldCheck size={14} className="text-teal-400" />
+            <span>{t('read_only')}</span>
+          </div>
         </div>
       </header>
 

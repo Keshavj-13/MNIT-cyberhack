@@ -46,6 +46,27 @@ async function makeEncryptedRequest(
   return JSON.parse(decryptedStr);
 }
 
+export async function registerCustomer(username: string, email: string, phone: string, password: string): Promise<any> {
+  const res = await axios.post(`${API_BASE}/customer/auth/register`, {
+    username, email, phone, password
+  });
+  return res.data;
+}
+
+export async function sendOTP(identifier: string, channel: 'email' | 'phone'): Promise<any> {
+  const res = await axios.post(`${API_BASE}/customer/auth/send-otp`, {
+    identifier, channel
+  });
+  return res.data;
+}
+
+export async function verifyOTP(identifier: string, otp: string, channel: 'email' | 'phone'): Promise<any> {
+  const res = await axios.post(`${API_BASE}/customer/auth/verify-otp`, {
+    identifier, otp, channel
+  });
+  return res.data;
+}
+
 export async function loginCustomer(username: string, pin: string): Promise<any> {
   const res = await axios.post(`${API_BASE}/customer/auth/login`, {
     username,

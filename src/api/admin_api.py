@@ -11,6 +11,10 @@ from src.api.internal.session_crypto import verify_jwt_token, create_jwt_token, 
 
 app = FastAPI(title="MNIT Admin Security Board API", version="1.0.0")
 
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
 # Strict CORS: Allow only Admin frontend port 3002
 app.add_middleware(
     CORSMiddleware,

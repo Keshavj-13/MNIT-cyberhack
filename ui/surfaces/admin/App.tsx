@@ -2,13 +2,39 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   ShieldAlert, ShieldCheck, AlertCircle, Skull, Activity, Cpu, 
-  Database, LogOut, Lock, RefreshCw, Layers, Bell, Clock, Search, Terminal
+  Database, LogOut, Lock, RefreshCw, Layers, Bell, Clock, Search, Terminal, Type
 } from 'lucide-react';
+import { usePreferences } from './Preferences';
+
+const T: Record<string, any> = {
+  en: {
+    header_title: 'MNIT Security Operations',
+    header_sub: 'Real-Time Threat Console',
+    logout: 'Sign Out',
+    tab_dashboard: 'Risk Dashboard',
+    tab_providers: 'Intelligence Providers',
+    tab_timeline: 'Security Log Feed',
+    tab_alerts: 'Incident Alert Stream',
+  },
+  hi: {
+    header_title: 'एमएनआईटी सुरक्षा संचालन',
+    header_sub: 'रीयल-टाइम थ्रेट कंसोल',
+    logout: 'साइन आउट',
+    tab_dashboard: 'जोखिम डैशबोर्ड',
+    tab_providers: 'खुफिया प्रदाता',
+    tab_timeline: 'सुरक्षा लॉग फ़ीड',
+    tab_alerts: 'घटना अलर्ट स्ट्रीम',
+  }
+};
+
 
 axios.defaults.withCredentials = true;
 const API_BASE = 'http://localhost:8002';
 
 export default function App() {
+  const pref = usePreferences();
+  const t = (key: string) => T[pref.lang][key] || key;
+
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -173,8 +199,8 @@ export default function App() {
             <Cpu size={20} />
           </div>
           <div>
-            <h1 className="font-bold text-base leading-tight text-white">MNIT Security Operations</h1>
-            <p className="text-[10px] text-neutral-500 font-semibold uppercase tracking-widest font-mono">Real-Time Threat Console</p>
+            <h1 className="font-bold text-base leading-tight text-white">{t('header_title')}</h1>
+            <p className="text-[10px] text-neutral-500 font-semibold uppercase tracking-widest font-mono">{t('header_sub')}</p>
           </div>
         </div>
 
@@ -191,12 +217,23 @@ export default function App() {
             <RefreshCw size={15} />
           </button>
 
+          <div className="flex bg-neutral-900 border border-white/[0.06] rounded-lg p-1">
+            <button onClick={() => pref.setFontSize('dec')} className="px-2 text-neutral-400 hover:text-white text-[10px] font-bold">A-</button>
+            <button onClick={() => pref.setFontSize('reset')} className="px-2 text-neutral-400 hover:text-white text-[10px] border-x border-white/[0.06] font-bold">A</button>
+            <button onClick={() => pref.setFontSize('inc')} className="px-2 text-neutral-400 hover:text-white text-[10px] font-bold">A+</button>
+          </div>
+
+          <div className="flex bg-neutral-900 border border-white/[0.06] rounded-lg p-1 text-[10px] font-bold">
+            <button onClick={() => pref.setLang('en')} className={`px-2 py-0.5 rounded ${pref.lang === 'en' ? 'bg-teal-500 text-black' : 'text-neutral-400 hover:text-white'}`}>EN</button>
+            <button onClick={() => pref.setLang('hi')} className={`px-2 py-0.5 rounded ${pref.lang === 'hi' ? 'bg-teal-500 text-black' : 'text-neutral-400 hover:text-white'}`}>HI</button>
+          </div>
+
           <button 
             onClick={handleLogout}
             className="flex items-center gap-1.5 bg-neutral-900 border border-white/[0.06] hover:bg-neutral-800 text-neutral-400 hover:text-white px-3 py-1.5 rounded-lg text-xs"
           >
             <LogOut size={13} />
-            <span>Sign Out</span>
+            <span>{t('logout')}</span>
           </button>
         </div>
       </header>
@@ -212,7 +249,7 @@ export default function App() {
             }`}
           >
             <Layers size={18} />
-            <span>Risk Dashboard</span>
+            <span>{t('tab_dashboard')}</span>
           </button>
           <button 
             onClick={() => setActiveTab('providers')}
@@ -221,7 +258,7 @@ export default function App() {
             }`}
           >
             <Cpu size={18} />
-            <span>Intelligence Providers</span>
+            <span>{t('tab_providers')}</span>
           </button>
           <button 
             onClick={() => setActiveTab('timeline')}
@@ -230,7 +267,7 @@ export default function App() {
             }`}
           >
             <Clock size={18} />
-            <span>Security Log Feed</span>
+            <span>{t('tab_timeline')}</span>
           </button>
           <button 
             onClick={() => setActiveTab('alerts')}
@@ -239,7 +276,7 @@ export default function App() {
             }`}
           >
             <Bell size={18} />
-            <span>Incident Alert Stream</span>
+            <span>{t('tab_alerts')}</span>
           </button>
         </aside>
 

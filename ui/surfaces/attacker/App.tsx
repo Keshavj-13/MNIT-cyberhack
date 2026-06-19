@@ -4,6 +4,25 @@ import {
   Flame, Gavel, User, AlertTriangle, MessageSquare, UserX, 
   Loader2, LogOut, ShieldAlert, Cpu, Terminal, Play, Plus, RefreshCw, Sliders
 } from 'lucide-react';
+import { usePreferences } from './Preferences';
+
+const T: Record<string, any> = {
+  en: {
+    header_title: 'MNIT Threat Simulator',
+    header_sub: 'Adversarial Operations',
+    logout: 'Close Console',
+    tab_playback: 'Scripted Playback',
+    tab_custom: 'Custom Vectors',
+  },
+  hi: {
+    header_title: 'एमएनआईटी थ्रेट सिम्युलेटर',
+    header_sub: 'प्रतिकूल संचालन',
+    logout: 'कंसोल बंद करें',
+    tab_playback: 'स्क्रिप्टेड प्लेबैक',
+    tab_custom: 'कस्टम वैक्टर',
+  }
+};
+
 
 axios.defaults.withCredentials = true;
 const API_BASE = 'http://localhost:8003';
@@ -17,6 +36,9 @@ const SCENARIOS = [
 ];
 
 export default function App() {
+  const pref = usePreferences();
+  const t = (key: string) => T[pref.lang][key] || key;
+
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -196,8 +218,8 @@ export default function App() {
             <Flame size={20} />
           </div>
           <div>
-            <h1 className="font-bold text-base leading-tight text-white font-mono">MNIT Threat Simulator</h1>
-            <p className="text-[10px] text-neutral-500 font-semibold uppercase tracking-widest font-mono">Adversarial Operations</p>
+            <h1 className="font-bold text-base leading-tight text-white font-mono">{t('header_title')}</h1>
+            <p className="text-[10px] text-neutral-500 font-semibold uppercase tracking-widest font-mono">{t('header_sub')}</p>
           </div>
         </div>
 
@@ -206,12 +228,23 @@ export default function App() {
             Sim Namespace: Isolation Enforced (sim_*)
           </div>
 
+          <div className="flex bg-neutral-900 border border-white/[0.06] rounded-lg p-1">
+            <button onClick={() => pref.setFontSize('dec')} className="px-2 text-neutral-400 hover:text-white text-[10px] font-bold">A-</button>
+            <button onClick={() => pref.setFontSize('reset')} className="px-2 text-neutral-400 hover:text-white text-[10px] border-x border-white/[0.06] font-bold">A</button>
+            <button onClick={() => pref.setFontSize('inc')} className="px-2 text-neutral-400 hover:text-white text-[10px] font-bold">A+</button>
+          </div>
+
+          <div className="flex bg-neutral-900 border border-white/[0.06] rounded-lg p-1 text-[10px] font-bold">
+            <button onClick={() => pref.setLang('en')} className={`px-2 py-0.5 rounded ${pref.lang === 'en' ? 'bg-red-500 text-white' : 'text-neutral-400 hover:text-white'}`}>EN</button>
+            <button onClick={() => pref.setLang('hi')} className={`px-2 py-0.5 rounded ${pref.lang === 'hi' ? 'bg-red-500 text-white' : 'text-neutral-400 hover:text-white'}`}>HI</button>
+          </div>
+
           <button 
             onClick={handleLogout}
             className="flex items-center gap-1.5 bg-neutral-900 border border-white/[0.06] hover:bg-neutral-800 text-neutral-400 hover:text-white px-3 py-1.5 rounded-lg text-xs"
           >
             <LogOut size={13} />
-            <span>Close Console</span>
+            <span>{t('logout')}</span>
           </button>
         </div>
       </header>
@@ -227,7 +260,7 @@ export default function App() {
             }`}
           >
             <Gavel size={18} />
-            <span>Scripted Playback</span>
+            <span>{t('tab_playback')}</span>
           </button>
           <button 
             onClick={() => setActiveTab('custom')}
@@ -236,7 +269,7 @@ export default function App() {
             }`}
           >
             <Sliders size={18} />
-            <span>Custom Vectors</span>
+            <span>{t('tab_custom')}</span>
           </button>
         </aside>
 
