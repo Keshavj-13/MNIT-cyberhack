@@ -11,6 +11,14 @@ import {
 import { useTelemetry } from './hooks/useTelemetry';
 import { usePreferences } from './Preferences';
 import cyberFraudImg from '../../images/cyber-fraud.jfif';
+
+import { useAppContext } from './context/AppContext';
+const DashboardTab = React.lazy(() => import('./pages/DashboardTab'));
+const TransferTab = React.lazy(() => import('./pages/TransferTab'));
+const BeneficiariesTab = React.lazy(() => import('./pages/BeneficiariesTab'));
+const StatementsTab = React.lazy(() => import('./pages/StatementsTab'));
+const SupportTab = React.lazy(() => import('./pages/SupportTab'));
+
 import digitalBankingImg from '../../images/digital-banking.jfif';
 import homeLoanImg from '../../images/home-loan.jfif';
 import agriGoldLoanImg from '../../images/agri-gold-loan.jfif';
@@ -51,99 +59,23 @@ export default function App() {
   const pref = usePreferences();
   const t = (key: string) => T[pref.lang][key] || key;
 
-  // Authentication & Cryptography State
-  const [isAuthenticated, setIsAuthenticated] = useState(() => sessionStorage.getItem('cbi_crypto_state') !== null);
-  const [username, setUsername] = useState(() => sessionStorage.getItem('cbi_username') || '');
+  const { 
+    cryptoState, setCryptoState, isAuthenticated, setIsAuthenticated, username, setUsername,
+    keyRotationInfo, showCryptoModal, setShowCryptoModal, keyRotatedAnim,
+    incomingNotification,
+    refreshData 
+  } = useAppContext();
+
+  // Login UI state
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Cryptographic Session Variables
-  const [cryptoState, setCryptoState] = useState(() => {
-    const saved = sessionStorage.getItem('cbi_crypto_state');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
-    }
-    return { aesKey: '', keyVersion: 1, sessionId: '', riskLevel: 1 };
-  });
-
-  // Sync cryptoState to sessionStorage
-  useEffect(() => {
-    if (isAuthenticated && cryptoState.aesKey) {
-      sessionStorage.setItem('cbi_crypto_state', JSON.stringify(cryptoState));
-      sessionStorage.setItem('cbi_username', username);
-    } else if (!isAuthenticated) {
-      sessionStorage.removeItem('cbi_crypto_state');
-      sessionStorage.removeItem('cbi_username');
-    }
-  }, [cryptoState, isAuthenticated, username]);
-
-  // Verify session on mount
-  useEffect(() => {
-    async function verifySession() {
-      if (isAuthenticated) {
-        try {
-          const me = await getMe();
-          if (me.session_id === cryptoState.sessionId) {
-            setCryptoState(prev => ({
-              ...prev,
-              keyVersion: me.key_version,
-              riskLevel: me.risk_level
-            }));
-          } else {
-            setIsAuthenticated(false);
-          }
-        } catch (err) {
-          setIsAuthenticated(false);
-        }
-      }
-    }
-    verifySession();
-  }, []);
-
-  // UI state
+  // Navigation UI state
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [showCryptoModal, setShowCryptoModal] = useState(false);
-  const [keyRotatedAnim, setKeyRotatedAnim] = useState(false);
-  const [keyRotationInfo, setKeyRotationInfo] = useState<any>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  
-  // Banking data
-  const [balances, setBalances] = useState<any>({ checking: { balance: 0 }, savings: { balance: 0 } });
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [beneficiaries, setBeneficiaries] = useState<any[]>([]);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-
-  // Transfer form state
-  const [transferAmount, setTransferAmount] = useState('');
-  const [targetBankingId, setTargetBankingId] = useState('');
-  const [transferPassword, setTransferPassword] = useState('');
-  const [pendingTxId, setPendingTxId] = useState(0);
-  const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState('');
-  const [transferStatus, setTransferStatus] = useState<any>(null); // { status: string, message: string }
-  const [isTransferring, setIsTransferring] = useState(false);
-  
-  // OTP step-up verification modal state
-  const [showOtpModal, setShowOtpModal] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [otpError, setOtpError] = useState('');
-  const [simulatedSmsCode, setSimulatedSmsCode] = useState<string | null>(null);
-  const [smsNotification, setSmsNotification] = useState<string | null>(null);
-
-  // Add Beneficiary form state
-  const [newPayeeName, setNewPayeeName] = useState('');
-  const [newPayeeAccount, setNewPayeeAccount] = useState('');
-  const [newPayeeBank, setNewPayeeBank] = useState('');
-  const [addPayeeStatus, setAddPayeeStatus] = useState<string | null>(null);
-  const [isAddingPayee, setIsAddingPayee] = useState(false);
-
-  // Support state
-  const [supportTopic, setSupportTopic] = useState('general');
-  const [supportMessage, setSupportMessage] = useState('');
-  const [supportSuccess, setSupportSuccess] = useState(false);
-
   // Registration / Sign-up state
   const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
   const [regStep, setRegStep] = useState(1); // 1=details, 2=email OTP, 3=phone OTP, 4=success
@@ -183,37 +115,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isAuthenticated]);
 
-  // Fetch account data
-  useEffect(() => {
-    if (!isAuthenticated || !cryptoState.aesKey) return;
-    
-    async function fetchData() {
-      try {
-        const acc = await getAccountDetails(cryptoState);
-        setBalances(acc);
-        
-        const tx = await getStatements(cryptoState);
-        setTransactions(tx);
-        
-        const ben = await getBeneficiaries(cryptoState);
-        setBeneficiaries(ben);
-      } catch (err: any) {
-        console.error("Cryptographic fetch failed:", err);
-        if (err.response?.status === 409) {
-          // Cryptographic desync detected (key was shuffled by server in background)
-          triggerKeyDesyncError();
-        } else if (err.response?.status === 401) {
-          setIsAuthenticated(false);
-        }
-      }
-    }
-    fetchData();
-  }, [isAuthenticated, cryptoState.keyVersion, refreshTrigger]);
 
-  const triggerKeyDesyncError = () => {
-    alert("Cryptographic integrity check failed: Session keys have desynchronized. Security audit initiated.");
-    handleLogout();
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -248,139 +150,7 @@ export default function App() {
     setCryptoState({ aesKey: '', keyVersion: 1, sessionId: '', riskLevel: 1 });
     setUsername('');
     setPassword('');
-    setTransferStatus(null);
-    setTransferAmount('');
-    setSelectedBeneficiaryId('');
-    setSimulatedSmsCode(null);
-    setSmsNotification(null);
     setShowCryptoModal(false);
-    setShowOtpModal(false);
-  };
-
-  // Triggers key shuffle visual indicator
-  const animateKeyRotation = (newKey: string, newVersion: number, newRisk: number) => {
-    setKeyRotatedAnim(true);
-    setKeyRotationInfo({
-      oldKey: cryptoState.aesKey,
-      newKey: newKey,
-      oldVersion: cryptoState.keyVersion,
-      newVersion: newVersion,
-      riskLevel: newRisk
-    });
-    
-    // Play sound or vibration if needed, then update state after animation delay
-    setTimeout(() => {
-      setCryptoState(prev => ({
-        ...prev,
-        aesKey: newKey,
-        keyVersion: newVersion,
-        riskLevel: newRisk
-      }));
-      setKeyRotatedAnim(false);
-      setRefreshTrigger(prev => prev + 1);
-    }, 2500);
-  };
-
-  const handleTransferSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!targetBankingId || !transferAmount || !transferPassword) return;
-    
-    const amountNum = parseFloat(transferAmount);
-    if (isNaN(amountNum) || amountNum <= 0) {
-      alert("Invalid transfer amount");
-      return;
-    }
-
-    setIsTransferring(true);
-    setTransferStatus(null);
-
-    try {
-      const res = await initiateTransfer(cryptoState, amountNum, targetBankingId, transferPassword);
-      
-      // Check if key shuffled
-      if (res.key_rotated && res.new_key) {
-        animateKeyRotation(res.new_key, res.new_key_version, res.risk_level);
-      }
-
-      setPendingTxId(res.transaction_id);
-      setShowOtpModal(true);
-      // Real OTP sent via backend
-      setSmsNotification(`OTP dispatched to your registered email for transferring $${amountNum}`);
-      setTimeout(() => setSmsNotification(null), 10000);
-      
-    } catch (err: any) {
-      console.error(err);
-      if (err.response?.status === 409) {
-        triggerKeyDesyncError();
-      } else {
-        alert(err.response?.data?.detail || "Transfer rejected");
-      }
-    } finally {
-      setIsTransferring(false);
-    }
-  };
-
-  const handleOtpVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setOtpError('');
-    if (!otpCode) return;
-    
-    try {
-      const res = await confirmTransfer(cryptoState, pendingTxId, otpCode);
-      setShowOtpModal(false);
-      setTransferStatus({ status: 'approved', message: "Transfer verified & completed successfully." });
-      setTransferAmount('');
-      setTargetBankingId('');
-      setTransferPassword('');
-      setOtpCode('');
-      setPendingTxId(0);
-      setRefreshTrigger(prev => prev + 1);
-    } catch (err: any) {
-      setOtpError(err.response?.data?.detail || 'Authentication rejected.');
-    }
-  };
-
-  const handleAddPayee = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPayeeName || !newPayeeAccount || !newPayeeBank) return;
-
-    setIsAddingPayee(true);
-    setAddPayeeStatus(null);
-    try {
-      const res = await addBeneficiary(cryptoState, newPayeeName, newPayeeAccount, newPayeeBank);
-      
-      // Check if key shuffled due to payee addition risk
-      if (res.key_rotated && res.new_key) {
-        animateKeyRotation(res.new_key, res.new_key_version, res.risk_level);
-      }
-
-      if (res.transfer_status === 'challenged') {
-        setAddPayeeStatus('verification_required');
-      } else {
-        setAddPayeeStatus('added');
-        setNewPayeeName('');
-        setNewPayeeAccount('');
-        setNewPayeeBank('');
-        setRefreshTrigger(prev => prev + 1);
-      }
-    } catch (err: any) {
-      console.error(err);
-      if (err.response?.status === 409) {
-        triggerKeyDesyncError();
-      } else {
-        alert("Action rejected by threat engine");
-      }
-    } finally {
-      setIsAddingPayee(false);
-    }
-  };
-
-  const handleSupportSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!supportMessage.trim()) return;
-    setSupportSuccess(true);
-    setSupportMessage('');
-    setTimeout(() => setSupportSuccess(false), 5000);
   };
 
   // --- Registration Handlers ---
@@ -1534,394 +1304,33 @@ export default function App() {
         {/* Content Panel */}
         <main className="flex-1 overflow-y-auto p-8 bg-neutral-950">
           
-          {/* Dashboard Tab */}
-          {activeTab === 'dashboard' && (
-            <div className="max-w-4xl mx-auto space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
-                <h2 className="text-xl font-bold tracking-tight">Account Summary</h2>
-                <span className="text-xs text-neutral-500 font-mono">Decrypted under session key v{cryptoState.keyVersion}</span>
-              </div>
-
-              {/* Balances */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/[0.06] rounded-xl p-6 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-4 opacity-5"><Landmark size={120} /></div>
-                  <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Secure Checking</p>
-                  <p className="text-xs font-mono text-neutral-500 mt-1">{balances?.checking?.account_number || 'TR-XXXXXXXXXXX'}</p>
-                  <p className="text-3xl font-bold mt-4 tracking-tight">${balances?.checking?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-                </div>
-                <div className="bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/[0.06] rounded-xl p-6 relative overflow-hidden">
-                  <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Secure Savings</p>
-                  <p className="text-xs font-mono text-neutral-500 mt-1">{balances?.savings?.account_number || 'TR-XXXXXXXXXXX'}</p>
-                  <p className="text-3xl font-bold mt-4 tracking-tight">${balances?.savings?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-                </div>
-              </div>
-
-              {/* Recent Ledger */}
-              <div className="bg-neutral-900 border border-white/[0.06] rounded-xl p-6 space-y-4">
-                <h3 className="text-sm font-semibold tracking-wide text-white">Recent Statement Ledger</h3>
-                <div className="divide-y divide-white/[0.06] overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="text-neutral-500 border-b border-white/[0.06]">
-                        <th className="pb-3 font-semibold uppercase">Date</th>
-                        <th className="pb-3 font-semibold uppercase">Description</th>
-                        <th className="pb-3 font-semibold uppercase text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/[0.04] font-mono">
-                      {transactions.map((tx: any) => (
-                        <tr key={tx.id} className="hover:bg-white/[0.01]">
-                          <td className="py-3 text-neutral-400">{new Date(tx.date).toLocaleDateString()}</td>
-                          <td className="py-3 text-white font-sans">{tx.description}</td>
-                          <td className={`py-3 text-right font-bold ${tx.amount > 0 ? 'text-teal-400' : 'text-neutral-300'}`}>
-                            {tx.amount > 0 ? `+$${tx.amount.toFixed(2)}` : `-$${Math.abs(tx.amount).toFixed(2)}`}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Transfer Tab */}
-          {activeTab === 'transfer' && (
-            <div className="max-w-xl mx-auto space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
-                <h2 className="text-xl font-bold tracking-tight">Send Funds</h2>
-                <span className="text-xs text-neutral-500 font-mono">AES-256 encrypted payload</span>
-              </div>
-
-              {transferStatus && (
-                <div className="p-4 bg-teal-500/10 border border-teal-500/25 rounded-lg flex items-center gap-3 text-sm text-teal-300">
-                  <CheckCircle size={18} className="shrink-0" />
-                  <span>{transferStatus.message}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleTransferSubmit} className="bg-neutral-900 border border-white/[0.06] rounded-xl p-6 space-y-4 shadow-xl">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Recipient Banking ID</label>
-                  <input 
-                    type="text"
-                    placeholder="e.g. CBI-XXXXXXXX"
-                    value={targetBankingId}
-                    onChange={(e) => setTargetBankingId(e.target.value.toUpperCase())}
-                    className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-teal-500/50 font-mono tracking-widest"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Transfer Amount ($)</label>
-                  <input 
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={transferAmount}
-                    onChange={(e) => setTransferAmount(e.target.value)}
-                    className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-teal-500/50 font-mono"
-                  />
-                </div>
-                
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Account Password</label>
-                  <input 
-                    type="password"
-                    placeholder="Enter your password to authorize"
-                    value={transferPassword}
-                    onChange={(e) => setTransferPassword(e.target.value)}
-                    className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-teal-500/50"
-                  />
-                </div>
-
-                <div className="bg-neutral-950 p-4 rounded-lg border border-white/[0.04] text-[11px] text-neutral-400 space-y-1">
-                  <span className="font-semibold text-neutral-300 block mb-1">Cryptographic Policy Notice</span>
-                  <p>Upon submission, this request payload is encrypted locally using the active session key (v{cryptoState.keyVersion}).</p>
-                  <p>In accordance with the Threat Engine, transaction evaluation will execute silently. An OTP step-up verification will be requested via Email.</p>
-                </div>
-
-                <button 
-                  type="submit"
-                  disabled={isTransferring || !targetBankingId || !transferAmount || !transferPassword}
-                  className="w-full py-3 bg-teal-500 hover:bg-teal-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  {isTransferring ? 'Encrypting & Dispatching...' : 'Secure Transfer'}
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* Beneficiaries Tab */}
-          {activeTab === 'beneficiaries' && (
-            <div className="max-w-3xl mx-auto space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
-                <h2 className="text-xl font-bold tracking-tight">Manage Payees</h2>
-                <span className="text-xs text-neutral-500 font-mono font-semibold">Active Session: {cryptoState.sessionId}</span>
-              </div>
-
-              {addPayeeStatus === 'added' && (
-                <div className="p-4 bg-teal-500/10 border border-teal-500/25 rounded-lg flex items-center gap-3 text-sm text-teal-300">
-                  <CheckCircle size={18} />
-                  <span>Beneficiary added and registered with the threat monitoring grid successfully.</span>
-                </div>
-              )}
-
-              {addPayeeStatus === 'verification_required' && (
-                <div className="p-4 bg-amber-500/10 border border-amber-500/25 rounded-lg flex items-center gap-3 text-sm text-amber-300">
-                  <AlertTriangle size={18} />
-                  <span>Payee addition flagged. Key shuffled and step-up confirmation required on next transfer.</span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-                {/* Add Payee Form */}
-                <form onSubmit={handleAddPayee} className="lg:col-span-2 bg-neutral-900 border border-white/[0.06] rounded-xl p-6 space-y-4">
-                  <h3 className="text-sm font-semibold tracking-wide text-white">Add New Payee</h3>
-                  
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Full Name</label>
-                    <input 
-                      type="text"
-                      placeholder="e.g. Priyan Sharma"
-                      value={newPayeeName}
-                      onChange={(e) => setNewPayeeName(e.target.value)}
-                      className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-3.5 py-2 text-xs focus:outline-none focus:border-teal-500/50"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Account Number (IBAN)</label>
-                    <input 
-                      type="text"
-                      placeholder="e.g. TR-XXXXXXXXXXX"
-                      value={newPayeeAccount}
-                      onChange={(e) => setNewPayeeAccount(e.target.value)}
-                      className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-3.5 py-2 text-xs focus:outline-none focus:border-teal-500/50 font-mono"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Bank Name</label>
-                    <input 
-                      type="text"
-                      placeholder="e.g. Chase Bank"
-                      value={newPayeeBank}
-                      onChange={(e) => setNewPayeeBank(e.target.value)}
-                      className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-3.5 py-2 text-xs focus:outline-none focus:border-teal-500/50 font-sans"
-                    />
-                  </div>
-
-                  <button 
-                    type="submit"
-                    disabled={isAddingPayee || !newPayeeName || !newPayeeAccount || !newPayeeBank}
-                    className="w-full py-2.5 bg-teal-500 hover:bg-teal-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-xs rounded-lg transition-colors"
-                  >
-                    {isAddingPayee ? 'Registering Payee...' : 'Register Payee'}
-                  </button>
-                </form>
-
-                {/* Payees List */}
-                <div className="lg:col-span-3 bg-neutral-900 border border-white/[0.06] rounded-xl p-6 space-y-4">
-                  <h3 className="text-sm font-semibold tracking-wide text-white">Registered Payee List</h3>
-                  <div className="divide-y divide-white/[0.06]">
-                    {beneficiaries.map((b: any) => (
-                      <div key={b.id} className="py-3 flex items-center justify-between first:pt-0 last:pb-0">
-                        <div className="space-y-0.5">
-                          <p className="text-xs font-semibold text-white">{b.name}</p>
-                          <p className="text-[10px] text-neutral-500 font-mono">{b.account}</p>
-                        </div>
-                        <span className="text-[10px] bg-white/[0.04] text-neutral-400 border border-white/[0.06] px-2.5 py-1 rounded-full font-sans font-medium">
-                          {b.bank_name}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Statements Tab */}
-          {activeTab === 'statements' && (
-            <div className="max-w-xl mx-auto space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
-                <h2 className="text-xl font-bold tracking-tight">Statement Ledger</h2>
-                <span className="text-xs text-neutral-500 font-mono">Vault Storage</span>
-              </div>
-
-              <div className="bg-neutral-900 border border-white/[0.06] rounded-xl divide-y divide-white/[0.06] overflow-hidden">
-                {[
-                  { month: "May 2026", date: "June 01, 2026", size: "2.4 MB" },
-                  { month: "April 2026", date: "May 01, 2026", size: "2.3 MB" },
-                  { month: "March 2026", date: "April 01, 2026", size: "2.5 MB" },
-                  { month: "February 2026", date: "March 01, 2026", size: "2.1 MB" },
-                ].map((item, index) => (
-                  <div key={index} className="p-4 flex items-center justify-between hover:bg-white/[0.01] transition-colors">
-                    <div className="flex items-center space-x-3.5">
-                      <div className="w-8 h-8 rounded bg-teal-500/10 border border-teal-500/20 text-teal-400 grid place-items-center">
-                        <FileText size={16} />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-white">{item.month} statement.pdf</p>
-                        <p className="text-[10px] text-neutral-500 mt-0.5">Published {item.date}</p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => alert("Statement decrypted and opened in secure viewport.")}
-                      className="text-[11px] text-teal-400 font-semibold hover:underline font-mono"
-                    >
-                      Retrieve ({item.size})
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Support Tab */}
-          {activeTab === 'support' && (
-            <div className="max-w-3xl mx-auto space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
-                <h2 className="text-xl font-bold tracking-tight">Support Desk</h2>
-                <span className="text-xs text-neutral-500">Security & Help</span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-                {/* FAQs */}
-                <div className="md:col-span-3 bg-neutral-900 border border-white/[0.06] rounded-xl p-6 space-y-4">
-                  <h3 className="text-sm font-semibold tracking-wide text-white">Security & Policy FAQ</h3>
-                  
-                  <div className="space-y-4">
-                    <div className="space-y-1.5">
-                      <h4 className="text-xs font-bold text-teal-400">What is cryptographic session key rotation?</h4>
-                      <p className="text-[11px] text-neutral-400 leading-relaxed">
-                        To protect your account details from theft and hijacking, our system continuously monitors threats. If anomaly indicators are triggered, symmetric AES-256 session keys are shuffled in real-time, isolating past payloads from upcoming ones.
-                      </p>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <h4 className="text-xs font-bold text-teal-400">Why am I prompted for step-up verification?</h4>
-                      <p className="text-[11px] text-neutral-400 leading-relaxed">
-                        Step-up Verification (OTP) is activated during moderate-risk states (such as new payees or VPN usage). Enter the code sent to your registered device to verify the transfer's cryptographic signature.
-                      </p>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <h4 className="text-xs font-bold text-teal-400">What happens if a session enters lockout?</h4>
-                      <p className="text-[11px] text-neutral-400 leading-relaxed">
-                        If extreme risk is flagged (Level 4), session containment executes immediately. All active session keys are revoked and blacklisted globally, logging out the active browser immediately to freeze account activity.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Ticket Form */}
-                <div className="md:col-span-2">
-                  <form onSubmit={handleSupportSubmit} className="bg-neutral-900 border border-white/[0.06] rounded-xl p-6 space-y-4">
-                    <h3 className="text-sm font-semibold tracking-wide text-white">Submit Secure Ticket</h3>
-                    
-                    {supportSuccess && (
-                      <div className="p-3 bg-teal-500/10 border border-teal-500/25 rounded-lg text-[11px] text-teal-300 flex items-center gap-2">
-                        <CheckCircle size={14} />
-                        <span>Ticket submitted and encrypted. Reference #ST-{Math.floor(100000 + Math.random()*900000)}</span>
-                      </div>
-                    )}
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Inquiry Category</label>
-                      <select 
-                        value={supportTopic} 
-                        onChange={(e) => setSupportTopic(e.target.value)}
-                        className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-teal-500/50"
-                      >
-                        <option value="general">General Support</option>
-                        <option value="security">Security Alert Concern</option>
-                        <option value="dispute">Dispute Transaction</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Detailed Message</label>
-                      <textarea 
-                        rows={4}
-                        placeholder="Write support details here..."
-                        value={supportMessage}
-                        onChange={(e) => setSupportMessage(e.target.value)}
-                        className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-teal-500/50"
-                      ></textarea>
-                    </div>
-
-                    <button 
-                      type="submit" 
-                      disabled={!supportMessage.trim()}
-                      className="w-full py-2 bg-teal-500 hover:bg-teal-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-semibold text-xs rounded-lg transition-colors"
-                    >
-                      Encrypt & Send
-                    </button>
-                  </form>
-                </div>
-              </div>
-            </div>
-          )}
+          <React.Suspense fallback={<div className="flex justify-center items-center h-64 text-neutral-500 font-mono animate-pulse">Decrypting module payload...</div>}>
+            {activeTab === 'dashboard' && <DashboardTab />}
+            {activeTab === 'transfer' && <TransferTab />}
+            {activeTab === 'beneficiaries' && <BeneficiariesTab />}
+            {activeTab === 'statements' && <StatementsTab />}
+            {activeTab === 'support' && <SupportTab />}
+          </React.Suspense>
 
         </main>
       </div>
 
-      {/* Simulated SMS Notification Popup (To display step-up verification codes) */}
-      {smsNotification && (
-        <div className="fixed bottom-6 right-6 max-w-sm w-full bg-neutral-900 border-l-4 border-teal-500 rounded-lg p-4 shadow-2xl flex items-start space-x-3.5 z-50 animate-bounce">
-          <div className="grid place-items-center w-8 h-8 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-400 shrink-0 mt-0.5">
-            <Smartphone size={16} />
+
+      
+      {/* Real-time Incoming Transfer Notification Toast */}
+      {incomingNotification && (
+        <div className="fixed top-6 right-6 max-w-sm w-full bg-neutral-900 border-l-4 border-emerald-500 rounded-lg p-4 shadow-2xl flex items-start space-x-3.5 z-[60] animate-[slideIn_0.5s_ease-out]">
+          <div className="grid place-items-center w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0 mt-0.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
           </div>
           <div className="flex-1 space-y-1">
             <p className="text-xs font-bold text-white flex items-center justify-between">
-              <span>SMS Notification</span>
+              <span>Incoming Transfer</span>
               <span className="text-[10px] text-neutral-500 font-normal">Just now</span>
             </p>
-            <p className="text-xs text-neutral-300 leading-relaxed font-mono">{smsNotification}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Step-up Authentication (OTP) Modal */}
-      {showOtpModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-          <div className="max-w-md w-full bg-neutral-900 border border-white/[0.08] rounded-xl p-6 shadow-2xl space-y-5 relative">
-            <div className="flex items-center space-x-3 text-amber-400">
-              <Shield size={22} />
-              <h3 className="text-base font-bold text-white tracking-wide">Step-up Authentication Required</h3>
-            </div>
-            
-            <p className="text-xs text-neutral-400 leading-relaxed">
-              Moderate transaction risk has been signaled. To complete this transfer, please input the 6-digit confirmation code dispatched to your registered phone.
+            <p className="text-xs text-neutral-300 leading-relaxed font-mono">
+              You received <span className="text-emerald-400 font-bold">${incomingNotification.amount?.toLocaleString()}</span> from {incomingNotification.sender}.
             </p>
-
-            {otpError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400">
-                {otpError}
-              </div>
-            )}
-
-            <form onSubmit={handleOtpVerify} className="space-y-4">
-              <input 
-                type="text" 
-                maxLength={6}
-                placeholder="000000"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value)}
-                className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg py-3 text-center text-lg font-bold font-mono text-white tracking-[0.4em] focus:outline-none focus:border-teal-500/50"
-              />
-
-              <button 
-                type="submit"
-                disabled={otpCode.length < 6}
-                className="w-full py-2.5 bg-teal-500 hover:bg-teal-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-xs rounded-lg transition-colors"
-              >
-                Verify Cryptographic Code
-              </button>
-            </form>
           </div>
         </div>
       )}

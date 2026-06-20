@@ -5,7 +5,7 @@ import hashlib
 import smtplib
 import datetime
 from email.message import EmailMessage
-from fastapi import FastAPI, Depends, HTTPException, Body, Security, Response, Cookie
+from fastapi import FastAPI, Depends, HTTPException, Body, Security, Response, Cookie, WebSocket, WebSocketDisconnect, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -34,6 +34,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Key-Version"],
 )
+
+
 
 # DB Dependency
 def get_db():
@@ -680,7 +682,7 @@ def initiate_transfer(payload: EncryptedPayload = Body(...), user_payload = Depe
     return encrypt_response(response_data, cust_session)
 
 @app.post("/customer/transfer/confirm")
-def confirm_transfer(payload: EncryptedPayload = Body(...), user_payload = Depends(get_current_user_payload), db: Session = Depends(get_db)):
+def confirm_transfer(payload: EncryptedPayload = Body(...), user_payload = Depends(get_current_user_payload), db: Session = Depends(get_db), background_tasks: BackgroundTasks = None):
     decrypted_body, cust_session = decrypt_payload(payload, db)
     
     transaction_id = decrypted_body.get("transaction_id")
@@ -763,6 +765,18 @@ def confirm_transfer(payload: EncryptedPayload = Body(...), user_payload = Depen
     db.add(receiver_ledger)
     db.commit()
     
+    if background_tasks:
+        background_tasks.add_task(
+            manager.send_personal_message,
+            {
+                "type": "INCOMING_TRANSFER",
+                "amount": tx.amount,
+                "sender": sender.username,
+                "timestamp": datetime.datetime.utcnow().isoformat()
+            },
+            receiver.username
+        )
+    
     response_data = {
         "status": "success",
         "message": "Transfer completed successfully."
@@ -800,6 +814,61 @@ def telemetry(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)
     
     db.commit()
     return {"status": "success", "count": len(events)}
+
+# WebSocket Connection Manager
+class ConnectionManager:
+    def __init__(self):
+        # Maps user_id (int) to list of WebSockets
+        self.active_connections: dict[int, list[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, user_id: str):
+        await websocket.accept()
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = []
+        self.active_connections[user_id].append(websocket)
+
+    def disconnect(self, websocket: WebSocket, user_id: str):
+        if user_id in self.active_connections:
+            self.active_connections[user_id].remove(websocket)
+            if not self.active_connections[user_id]:
+                del self.active_connections[user_id]
+
+    async def send_personal_message(self, message: dict, user_id: str):
+        if user_id in self.active_connections:
+            for connection in self.active_connections[user_id]:
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    pass
+
+manager = ConnectionManager()
+
+@app.websocket("/customer/ws")
+async def websocket_endpoint(websocket: WebSocket, session_id: str = Query(...), db: Session = Depends(get_db)):
+    print(f"[WS] New connection attempt with session_id={session_id}")
+    try:
+        session = db.query(CustomerSession).filter(CustomerSession.session_id == session_id, CustomerSession.is_active == True).first()
+        if not session:
+            print(f"[WS] Session {session_id} not found or inactive. Rejecting.")
+            await websocket.close(code=1008)
+            return
+        
+        user_id = session.user_id
+        print(f"[WS] Session {session_id} belongs to user_id={user_id}. Accepting...")
+        await manager.connect(websocket, user_id)
+        print(f"[WS] Connection accepted for user_id={user_id}.")
+        try:
+            while True:
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            print(f"[WS] Client disconnected normally user_id={user_id}.")
+            manager.disconnect(websocket, user_id)
+        except Exception as e:
+            print(f"[WS] Error in receive loop for user_id={user_id}: {e}")
+            manager.disconnect(websocket, user_id)
+    except Exception as e:
+        print(f"[WS] Outer exception for session_id={session_id}: {e}")
+
 
 if __name__ == "__main__":
     init_db()
