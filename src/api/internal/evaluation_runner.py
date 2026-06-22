@@ -7,9 +7,10 @@ from src.engine.registry import ProviderRegistry
 from src.engine.session_models import SessionEvent
 from src.engine.features import FeatureExtractor
 from src.providers.implementations import (
-    TransactionRiskProvider, PhishingRiskProvider, 
-    SocialEngineeringRiskProvider, AccountTakeoverProvider, 
-    DeviceTrustProvider, NetworkRiskProvider
+    TransactionRiskProvider, PhishingRiskProvider,
+    SocialEngineeringRiskProvider, AccountTakeoverProvider,
+    DeviceTrustProvider, NetworkRiskProvider,
+    BeaconBehavioralProvider
 )
 
 # Initialize registry on import
@@ -21,6 +22,7 @@ _registry.register_provider(AccountTakeoverProvider())
 _registry.register_provider(NetworkRiskProvider())
 _registry.register_provider(DeviceTrustProvider())
 _registry.register_provider(PhishingRiskProvider())
+_registry.register_provider(BeaconBehavioralProvider())
 
 def _category_scores(breakdown: Dict[str, Any]) -> Dict[str, float]:
     scores: Dict[str, float] = {}
