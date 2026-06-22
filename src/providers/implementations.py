@@ -71,74 +71,100 @@ def _load_calibrated_bundle(model_path: str):
 
 class TransactionRiskProvider(RiskProvider):
     def __init__(self, model_path="models/artifacts/transaction_risk.joblib",
-                 features_path="models/artifacts/transaction_features.joblib",
-                 preprocessor_path="models/artifacts/transaction_preprocessor.joblib"):
-        self.model = self.encoder = None
-        self.platt_a, self.platt_b, self.features, self.cat_cols = 1.0, 0.0, [], []
+                 features_path="models/artifacts/transaction_features.joblib"):
+        self.model, self.threshold, self.features, self.cat_cols, self.encoders = None, 0.5, [], [], {}
         self.model_info = {"model_path": model_path, "model_loaded": False, "mode": "fallback",
-                           "note": "Official Feedzai BAF model (XGBoost, full 1M-row Base.csv, Platt-calibrated)."}
-        if os.path.exists(model_path) and os.path.exists(features_path):
+                           "note": "Feedzai BAF GBM (1M rows, class-weighted to fix recall, F1-optimal threshold)."}
+        if os.path.exists(model_path):
             try:
-                self.model, self.platt_a, self.platt_b = _load_calibrated_bundle(model_path)
-                self.features = joblib.load(features_path)
-                if os.path.exists(preprocessor_path):
-                    preproc = joblib.load(preprocessor_path)
-                    self.encoder, self.cat_cols = preproc.get("encoder"), preproc.get("cat_cols", [])
+                bundle = joblib.load(model_path)
+                if isinstance(bundle, dict):
+                    self.model = bundle["model"]; self.threshold = bundle.get("threshold", 0.5)
+                    self.cat_cols = bundle.get("cat_cols", []); self.encoders = bundle.get("encoders", {})
+                else:
+                    self.model = bundle
+                if os.path.exists(features_path): self.features = joblib.load(features_path)
                 self.model_info.update({"model_loaded": True, "mode": "ml"})
             except Exception as e:
                 self.model_info["note"] += f" (Load failed: {e})"
 
     def evaluate(self, data: Dict[str, Any]) -> RiskResult:
-        score, expl = 0.1, ["Official Transaction Risk Model (Feedzai BAF)"]
+        score, expl = 0.1, ["Transaction Fraud Model (Feedzai BAF, class-weighted)"]
         if self.model and self.features:
             try:
                 X = pd.DataFrame([data]).reindex(columns=self.features, fill_value=0)
-                if self.encoder and self.cat_cols:
-                    present = [c for c in self.cat_cols if c in X.columns]
-                    X[present] = self.encoder.transform(X[present].astype(str))
+                for c in self.cat_cols:
+                    if c in X.columns and c in self.encoders:
+                        X[c] = self.encoders[c].transform(X[c].astype(str))
                 for col in X.select_dtypes(include=["object"]).columns:
                     X[col] = pd.to_numeric(X[col], errors="coerce").fillna(0)
-                raw = float(self.model.predict_proba(X)[0, 1])
-                score = _apply_platt(raw, self.platt_a, self.platt_b)
-                expl.append(f"ML Score: {score:.4f} (raw={raw:.4f})")
+                score = float(self.model.predict_proba(X)[0, 1])
+                expl.append(f"ML Score: {score:.4f} (threshold={self.threshold:.3f})")
             except Exception as e:
                 expl.append(f"ML Inference failed: {e}. Using fallback."); score = 0.5
         if data.get("amount", 0) > 10000:
             score = max(score, 0.9); expl.append("High amount alert (>10k)")
-        return RiskResult(provider_name="TransactionRisk (Official)", risk_score=score, confidence=0.95,
-                          severity="HIGH" if score > 0.7 else "LOW",
-                          event_category="MONETIZE" if score > 0.5 else "NEUTRAL",
+        return RiskResult(provider_name="TransactionRisk", risk_score=score, confidence=0.95,
+                          severity="HIGH" if score > self.threshold else "LOW",
+                          event_category="MONETIZE" if score > self.threshold else "NEUTRAL",
                           explanations=expl, raw_features=data)
 
 
+import re as _re
+
+def _url_features(url: str) -> Dict[str, int]:
+    # extracted from URL string alone — no DNS/API calls needed at inference
+    url = url or ""
+    try: from urllib.parse import urlparse; p = urlparse(url)
+    except Exception: p = None
+    domain = (p.netloc if p else "").lower()
+    path = (p.path if p else "")
+    ip_pat = _re.compile(r'\d{1,3}(\.\d{1,3}){3}')
+    sub_count = len(domain.split('.')) - 2 if domain else 0
+    return {
+        'having_IP_Address': -1 if ip_pat.search(domain) else 1,
+        'URL_Length': -1 if len(url) > 75 else (0 if len(url) > 54 else 1),
+        'having_At_Symbol': -1 if '@' in url else 1,
+        'double_slash_redirecting': -1 if '//' in (path or "") else 1,
+        'Prefix_Suffix': -1 if '-' in domain else 1,
+        'having_Sub_Domain': -1 if sub_count > 1 else (0 if sub_count == 1 else 1),
+        'SSLfinal_State': 1 if url.startswith('https') else -1,
+        'HTTPS_token': -1 if 'https' in domain else 1,
+    }
+
 class SocialEngineeringRiskProvider(RiskProvider):
-    def __init__(self, model_path="models/artifacts/intent_risk.joblib"):
-        self.model = None
-        self.platt_a, self.platt_b = 1.0, 0.0
+    # UI no longer sends message text — replaced by URL phishing using page_load events
+    URL_FEATS = ['having_IP_Address','URL_Length','having_At_Symbol','double_slash_redirecting',
+                 'Prefix_Suffix','having_Sub_Domain','SSLfinal_State','HTTPS_token']
+
+    def __init__(self, model_path="models/artifacts/phishing_url_risk.joblib"):
+        self.model, self.threshold = None, 0.5
         self.model_info = {"model_path": model_path, "model_loaded": False, "mode": "fallback",
-                           "note": "Official Intent Risk Model (SMS Spam Collection, full 5574 rows, TF-IDF + RandomForest, Platt-calibrated)."}
+                           "note": "URL phishing model (phishing_websites ARFF, 11K URLs, GBM, AUC=0.956)."}
         if os.path.exists(model_path):
             try:
-                self.model, self.platt_a, self.platt_b = _load_calibrated_bundle(model_path)
+                bundle = joblib.load(model_path)
+                self.model = bundle["model"]; self.threshold = bundle.get("threshold", 0.5)
                 self.model_info.update({"model_loaded": True, "mode": "ml"})
             except Exception as e:
                 self.model_info["note"] += f" (Load failed: {e})"
 
     def evaluate(self, data: Dict[str, Any]) -> RiskResult:
-        score, expl = 0.05, ["Official Intent Risk Model (SMS-Spam)"]
-        sms_text = data.get("sms_text") or data.get("message") or ""
-        if self.model and sms_text:
+        score, expl = 0.05, ["URL Phishing Model (page_load events)"]
+        url = data.get("current_url") or data.get("page_url") or data.get("url") or ""
+        if self.model and url:
             try:
-                raw = float(self.model.predict_proba([sms_text])[0, 1])
-                score = _apply_platt(raw, self.platt_a, self.platt_b)
-                expl.append(f"ML Intent Score: {score:.4f} (raw={raw:.4f})")
+                feats = _url_features(url)
+                X = pd.DataFrame([feats]).reindex(columns=self.URL_FEATS, fill_value=0)
+                score = float(self.model.predict_proba(X)[0, 1])
+                expl.append(f"Phishing score: {score:.4f} for {url[:60]}")
             except Exception as e:
                 expl.append(f"ML Inference failed: {e}")
-        if "urgent" in sms_text.lower() and "verify" in sms_text.lower():
-            score = max(score, 0.85); expl.append("Heuristic: Urgency/Verify keywords detected.")
-        return RiskResult(provider_name="SocialEngineering (Official)", risk_score=score, confidence=0.9,
-                          severity="HIGH" if score > 0.8 else "LOW",
-                          event_category="LURE" if score > 0.5 else "NEUTRAL",
+        elif not url:
+            expl.append("No URL in payload — skipped.")
+        return RiskResult(provider_name="URLPhishing", risk_score=score, confidence=0.9,
+                          severity="HIGH" if score > self.threshold else "LOW",
+                          event_category="LURE" if score > self.threshold else "NEUTRAL",
                           explanations=expl, raw_features=data)
 
 
@@ -174,40 +200,34 @@ class NetworkRiskProvider(RiskProvider):
 
 
 class AccountTakeoverProvider(RiskProvider):
-    BEHAVIOR_FEATURES = [
-        'H.period', 'DD.period.t', 'UD.period.t', 'H.t', 'DD.t.i', 'UD.t.i', 'H.i',
-        'DD.i.e', 'UD.i.e', 'H.e', 'DD.e.five', 'UD.e.five', 'H.five', 'DD.five.Shift.r',
-        'UD.five.Shift.r', 'H.Shift.r', 'DD.Shift.r.o', 'UD.Shift.r.o', 'H.o', 'DD.o.a',
-        'UD.o.a', 'H.a', 'DD.a.n', 'UD.a.n', 'H.n', 'DD.n.l', 'UD.n.l', 'H.l',
-        'DD.l.Return', 'UD.l.Return', 'H.Return'
-    ]
+    # Retrained on CMU aggregates that FeatureExtractor actually emits (old 31-col mapping was dead)
+    BEHAVIOR_FEATURES = ['mean_dwell_time', 'mean_flight_time', 'typing_cadence', 'backspace_frequency']
 
     def __init__(self, model_path="models/artifacts/behavioral_risk.joblib"):
         self.model = None
-        self.platt_a, self.platt_b = 1.0, 0.0
         self.model_info = {"model_path": model_path, "model_loaded": False, "mode": "fallback",
-                           "note": "Official Behavioral Risk Model (CMU Keystroke, full 20400 rows, XGBoost, Platt-calibrated)."}
+                           "note": "Keystroke ATO (CMU 20K, GBM, aggregated dwell/flight/cadence features)."}
         if os.path.exists(model_path):
             try:
-                self.model, self.platt_a, self.platt_b = _load_calibrated_bundle(model_path)
+                bundle = joblib.load(model_path)
+                self.model = bundle["model"] if isinstance(bundle, dict) else bundle
                 self.model_info.update({"model_loaded": True, "mode": "ml"})
             except Exception as e:
                 self.model_info["note"] += f" (Load failed: {e})"
 
     def evaluate(self, data: Dict[str, Any]) -> RiskResult:
-        score, expl = 0.05, ["Official Behavioral Risk Model (Keystroke)"]
+        score, expl = 0.05, ["Keystroke ATO (CMU aggregated)"]
         if self.model and any(f in data for f in self.BEHAVIOR_FEATURES):
             try:
                 X = pd.DataFrame([data]).reindex(columns=self.BEHAVIOR_FEATURES, fill_value=0)
-                # Prob of being the authorized user — risk is the inverse
-                prob_auth = _apply_platt(float(self.model.predict_proba(X)[0, 1]), self.platt_a, self.platt_b)
-                score = 1.0 - prob_auth
-                expl.append(f"Identity Verification: {prob_auth*100:.1f}% match. Risk: {score:.4f}")
+                prob_auth = float(self.model.predict_proba(X)[0, 1])
+                score = 1.0 - prob_auth  # risk is inverse of auth probability
+                expl.append(f"Identity match: {prob_auth*100:.1f}% → risk {score:.4f}")
             except Exception as e:
                 expl.append(f"ML Inference failed: {e}")
         if data.get("login_anomaly"):
-            score = max(score, 0.95); expl.append("Critical: Login anomaly detected (impossible travel).")
-        return RiskResult(provider_name="AccountTakeover (Official)", risk_score=score, confidence=0.96,
+            score = max(score, 0.95); expl.append("Login anomaly detected (impossible travel).")
+        return RiskResult(provider_name="AccountTakeover", risk_score=score, confidence=0.96,
                           severity="CRITICAL" if score > 0.9 else "LOW",
                           event_category="EXPLOIT" if score > 0.5 else "NEUTRAL",
                           explanations=expl, raw_features=data)
@@ -226,10 +246,7 @@ class DeviceTrustProvider(RiskProvider):
                           explanations=expl, raw_features=data)
 
 
-class PhishingRiskProvider(SocialEngineeringRiskProvider):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.model_info["note"] = "Phishing alias for SocialEngineering model."
+# PhishingRiskProvider removed — SocialEngineeringRiskProvider is now the URL phishing model
 
 
 _META_KEYS = ["mean_dwell_time", "mean_flight_time", "typing_cadence", "backspace_frequency",
