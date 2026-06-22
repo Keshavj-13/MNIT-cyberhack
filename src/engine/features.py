@@ -23,6 +23,10 @@ class FeatureExtractor:
         features.update(self._extract_mouse_features(mouse_events))
         features.update(self._extract_session_features(session_events, events))
 
+        # raw deltas fed to BeaconBehavioralProvider — aggregated scalars lose the rhythm VarCNN needs
+        ts = sorted(e.get("timestamp", 0) for e in events if e.get("timestamp"))
+        features["inter_event_timings"] = [ts[i+1] - ts[i] for i in range(len(ts) - 1)]
+
         return features
 
     def _empty_features(self) -> Dict[str, Any]:
