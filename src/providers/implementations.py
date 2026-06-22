@@ -200,26 +200,32 @@ class NetworkRiskProvider(RiskProvider):
 
 
 class AccountTakeoverProvider(RiskProvider):
-    # Retrained on CMU aggregates that FeatureExtractor actually emits (old 31-col mapping was dead)
-    BEHAVIOR_FEATURES = ['mean_dwell_time', 'mean_flight_time', 'typing_cadence', 'backspace_frequency']
+    BEHAVIOR_FEATURES = ["dwell_mean","dwell_std","dwell_range","flight_mean","flight_std",
+                         "flight_range","lat_mean","lat_std","lat_range","rhythm"]
 
     def __init__(self, model_path="models/artifacts/behavioral_risk.joblib"):
-        self.model = None
+        self.model = self.scaler = None; self.threshold = 0.41
         self.model_info = {"model_path": model_path, "model_loaded": False, "mode": "fallback",
-                           "note": "Keystroke ATO (CMU 20K, GBM, aggregated dwell/flight/cadence features)."}
+                           "note": "Keystroke ATO (CMU 20K, GBM, 10 dwell/flight/latency features, AUC=0.89)."}
         if os.path.exists(model_path):
             try:
                 bundle = joblib.load(model_path)
-                self.model = bundle["model"] if isinstance(bundle, dict) else bundle
+                if isinstance(bundle, dict):
+                    self.model = bundle["model"]; self.scaler = bundle.get("scaler")
+                    self.threshold = bundle.get("threshold", 0.41)
+                    self.BEHAVIOR_FEATURES = bundle.get("features", self.BEHAVIOR_FEATURES)
+                else:
+                    self.model = bundle
                 self.model_info.update({"model_loaded": True, "mode": "ml"})
             except Exception as e:
                 self.model_info["note"] += f" (Load failed: {e})"
 
     def evaluate(self, data: Dict[str, Any]) -> RiskResult:
-        score, expl = 0.05, ["Keystroke ATO (CMU aggregated)"]
+        score, expl = 0.05, ["Keystroke ATO (CMU 10-feature GBM)"]
         if self.model and any(f in data for f in self.BEHAVIOR_FEATURES):
             try:
                 X = pd.DataFrame([data]).reindex(columns=self.BEHAVIOR_FEATURES, fill_value=0)
+                if self.scaler: X = pd.DataFrame(self.scaler.transform(X), columns=self.BEHAVIOR_FEATURES)
                 prob_auth = float(self.model.predict_proba(X)[0, 1])
                 score = 1.0 - prob_auth  # risk is inverse of auth probability
                 expl.append(f"Identity match: {prob_auth*100:.1f}% → risk {score:.4f}")
@@ -227,9 +233,9 @@ class AccountTakeoverProvider(RiskProvider):
                 expl.append(f"ML Inference failed: {e}")
         if data.get("login_anomaly"):
             score = max(score, 0.95); expl.append("Login anomaly detected (impossible travel).")
-        return RiskResult(provider_name="AccountTakeover", risk_score=score, confidence=0.96,
+        return RiskResult(provider_name="AccountTakeover", risk_score=score, confidence=0.89,
                           severity="CRITICAL" if score > 0.9 else "LOW",
-                          event_category="EXPLOIT" if score > 0.5 else "NEUTRAL",
+                          event_category="EXPLOIT" if score > self.threshold else "NEUTRAL",
                           explanations=expl, raw_features=data)
 
 

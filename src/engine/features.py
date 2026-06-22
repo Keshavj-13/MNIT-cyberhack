@@ -44,17 +44,27 @@ class FeatureExtractor:
         }
 
     def _extract_behavioral_features(self, keystrokes: List[Dict[str, Any]]) -> Dict[str, Any]:
-        dwell_times = [k['data'].get('dwellTime') for k in keystrokes if k['data'].get('event') == 'dwell' and k['data'].get('dwellTime') is not None]
-        flight_times = [k['data'].get('flightTime') for k in keystrokes if k['data'].get('event') == 'flight' and k['data'].get('flightTime') is not None]
-        
-        backspace_count = sum(1 for k in keystrokes if k['data'].get('key') == 'Backspace')
-        total_keys = len(keystrokes)
-
+        dwell = [k['data'].get('dwellTime') for k in keystrokes if k['data'].get('event') == 'dwell' and k['data'].get('dwellTime') is not None]
+        flight = [k['data'].get('flightTime') for k in keystrokes if k['data'].get('event') == 'flight' and k['data'].get('flightTime') is not None]
+        bk = sum(1 for k in keystrokes if k['data'].get('key') == 'Backspace')
+        # lat = up-down latency, approximated as dwell + flight; rhythm = CV of flight times
+        lat = [d + f for d, f in zip(dwell, flight[:len(dwell)])] if dwell and flight else []
+        fs, fm = (float(np.std(flight)), float(np.mean(flight))) if flight else (0.0, 0.0)
         return {
-            "mean_dwell_time": float(np.mean(dwell_times)) if dwell_times else 0.0,
-            "mean_flight_time": float(np.mean(flight_times)) if flight_times else 0.0,
-            "typing_cadence": float(np.std(flight_times)) if flight_times else 0.0,
-            "backspace_frequency": float(backspace_count / total_keys) if total_keys > 0 else 0.0
+            "mean_dwell_time": float(np.mean(dwell)) if dwell else 0.0,
+            "mean_flight_time": fm,
+            "typing_cadence": fs,
+            "backspace_frequency": float(bk / len(keystrokes)) if keystrokes else 0.0,
+            # expanded features for ATO 10-feature model
+            "dwell_mean": float(np.mean(dwell)) if dwell else 0.0,
+            "dwell_std":  float(np.std(dwell))  if dwell else 0.0,
+            "dwell_range": float(np.max(dwell) - np.min(dwell)) if dwell else 0.0,
+            "flight_mean": fm, "flight_std": fs,
+            "flight_range": float(np.max(flight) - np.min(flight)) if flight else 0.0,
+            "lat_mean":  float(np.mean(lat))  if lat else 0.0,
+            "lat_std":   float(np.std(lat))   if lat else 0.0,
+            "lat_range": float(np.max(lat) - np.min(lat)) if lat else 0.0,
+            "rhythm": fs / (fm + 1e-9),
         }
 
     def _extract_mouse_features(self, mouse_events: List[Dict[str, Any]]) -> Dict[str, Any]:
