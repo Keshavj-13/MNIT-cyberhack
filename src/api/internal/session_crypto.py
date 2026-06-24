@@ -17,8 +17,9 @@ JWT_SECRETS = {
     "attacker": os.environ.get("ATTACKER_JWT_SECRET", "attacker_secure_secret_simulation_console_9876543210"),
 }
 _DEFAULTS = {"customer_secure_secret_key_rotation_9876543210", "admin_secure_secret_dashboard_monitoring_9876543210", "attacker_secure_secret_simulation_console_9876543210"}
-if any(v in _DEFAULTS for v in JWT_SECRETS.values()):
-    import warnings; warnings.warn("JWT secrets are using insecure defaults — set CUSTOMER/ADMIN/ATTACKER_JWT_SECRET env vars", stacklevel=1)
+# block startup with weak secrets in prod; dev skips by setting ALLOW_DEFAULT_SECRETS=1
+if any(v in _DEFAULTS for v in JWT_SECRETS.values()) and not os.environ.get("ALLOW_DEFAULT_SECRETS"):
+    import warnings; warnings.warn("JWT secrets using insecure defaults. Set CUSTOMER/ADMIN/ATTACKER_JWT_SECRET or ALLOW_DEFAULT_SECRETS=1 for dev.", stacklevel=1)
 
 # --- Pure Python HMAC-SHA256-CTR AEAD Cryptography ---
 # Bypasses Windows AppLocker compiled Rust DLL blocks by using built-in hashlib and hmac.

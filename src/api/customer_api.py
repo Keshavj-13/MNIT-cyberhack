@@ -489,10 +489,17 @@ MOCK_TRANSACTIONS = [
     {"id": 4, "date": "2026-06-10T19:00:00", "description": "Online Bookstore Payment", "amount": -42.10, "type": "debit"},
 ]
 
-MOCK_BENEFICIARIES = [
+# ponytail: per-user lists, no DB table needed for mock data
+_DEFAULT_BENEFICIARIES = [
     {"id": 1, "name": "Alice Smith", "account_number": "TR-47392847293", "bank_name": "Garanti BBVA"},
     {"id": 2, "name": "Bob Johnson", "account_number": "TR-10293847583", "bank_name": "Isbank"}
 ]
+_USER_BENEFICIARIES: Dict[str, list] = {}
+
+def _get_beneficiaries(user_id: str) -> list:
+    if user_id not in _USER_BENEFICIARIES:
+        _USER_BENEFICIARIES[user_id] = list(_DEFAULT_BENEFICIARIES)
+    return _USER_BENEFICIARIES[user_id]
 
 @app.post("/customer/account")
 def get_account_details(payload: EncryptedPayload = Body(...), user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
@@ -515,19 +522,16 @@ def get_beneficiaries(payload: EncryptedPayload = Body(...), user = Depends(get_
     
     # If it's a GET operation disguised as POST (decrypted_body is empty), return list
     # If it contains name/account/bank, add new beneficiary and run silent evaluation
+    uid = user.get("sub", "")
+    blist = _get_beneficiaries(uid)
     if decrypted_body and "name" in decrypted_body:
-        name = decrypted_body["name"]
-        account_number = decrypted_body["account_number"]
-        bank_name = decrypted_body["bank_name"]
-        
-        # In-memory append for this session's context
-        new_beneficiary = {
-            "id": len(MOCK_BENEFICIARIES) + 1,
-            "name": name,
-            "account_number": account_number,
-            "bank_name": bank_name
-        }
-        MOCK_BENEFICIARIES.append(new_beneficiary)
+        name = decrypted_body.get("name", "").strip()
+        account_number = decrypted_body.get("account_number", "").strip()
+        bank_name = decrypted_body.get("bank_name", "").strip()
+        if not name or len(name) > 100 or not account_number or len(account_number) > 50:
+            raise HTTPException(status_code=400, detail="Invalid beneficiary fields.")
+        new_beneficiary = {"id": len(blist) + 1, "name": name, "account_number": account_number, "bank_name": bank_name}
+        blist.append(new_beneficiary)
         
         # Trigger silent evaluation to see if adding payee is an anomaly
         eval_payload = {
@@ -563,15 +567,22 @@ def get_beneficiaries(payload: EncryptedPayload = Body(...), user = Depends(get_
             "risk_level": eval_result.escalation_level
         }
         return encrypt_response(response_data, cust_session)
-        
-    return encrypt_response(MOCK_BENEFICIARIES, cust_session)
+    return encrypt_response(blist, cust_session)
 
 @app.post("/customer/transfer")
 def transfer(payload: EncryptedPayload = Body(...), user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
     decrypted_body, cust_session = decrypt_payload(payload, db)
     
-    amount = decrypted_body.get("amount", 0.0)
+    try:
+        amount = float(decrypted_body.get("amount", 0))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid transfer amount.")
+    if amount <= 0 or amount > 1_000_000:
+        raise HTTPException(status_code=400, detail="Amount must be between 0 and 1,000,000.")
     beneficiary_id = decrypted_body.get("beneficiary_id")
+    uid = user.get("sub", "")
+    if beneficiary_id is not None and not any(b["id"] == beneficiary_id for b in _get_beneficiaries(uid)):
+        raise HTTPException(status_code=400, detail="Beneficiary not found.")
     is_new = decrypted_body.get("is_new_beneficiary", False)
     
     # Run evaluation

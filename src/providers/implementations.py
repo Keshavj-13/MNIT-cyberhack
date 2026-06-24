@@ -177,13 +177,14 @@ class NetworkRiskProvider(RiskProvider):
 
     def evaluate(self, data: Dict[str, Any]) -> RiskResult:
         score, expl = 0.05, ["Network heuristics (session metadata)"]
-        if data.get("vpn_detected") or data.get("proxy_detected"):
+        def _flag(k): return str(data.get(k, "")).lower() in ("1", "true", "yes") or bool(data.get(k))
+        if _flag("vpn_detected") or _flag("proxy_detected"):
             score = max(score, 0.4); expl.append("VPN/proxy detected.")
-        if data.get("tor_detected"):
+        if _flag("tor_detected"):
             score = max(score, 0.75); expl.append("TOR exit node detected.")
-        if data.get("impossible_geo"):
+        if _flag("impossible_geo"):
             score = max(score, 0.8); expl.append("Impossible geo-velocity (location jump).")
-        if data.get("blacklisted_ip"):
+        if _flag("blacklisted_ip"):
             score = max(score, 0.9); expl.append("IP on threat intelligence blocklist.")
         return RiskResult(provider_name="NetworkRisk", risk_score=score, confidence=0.85,
                           severity="HIGH" if score > 0.7 else "LOW",
@@ -257,7 +258,7 @@ class BeaconBehavioralProvider(RiskProvider):
 
     def __init__(self, model_path="models/beacon/best_model_varcnn_60WS_90OL_seq1024_thr0.99.pth"):
         self.net = None
-        self._session_cache: Dict[str, int] = {}  # session_id → last top_cls for consistency check
+        self._session_cache: Dict[str, int] = {}  # session_id → last top_cls; capped to avoid unbounded growth
         self.model_info = {"model_path": model_path, "model_loaded": False, "mode": "fallback",
                            "note": "BEACON VarCNN (Singh et al. 2026, arXiv:2605.10867). 60WS/90OL/seq1024/thr0.99."}
         if not _TORCH or not os.path.exists(model_path): return
@@ -301,13 +302,15 @@ class BeaconBehavioralProvider(RiskProvider):
                         expl.append(f"Fingerprint mismatch: best user-{top_cls:02d} at {top_prob*100:.1f}% → risk {score:.2f}")
                     else:
                         expl.append(f"Identity consistent: user-{top_cls:02d} ({top_prob*100:.1f}%)")
-                    if sid: self._session_cache[sid] = top_cls
+                    if sid:
+                        if len(self._session_cache) > 1000: self._session_cache.pop(next(iter(self._session_cache)))
+                        self._session_cache[sid] = top_cls
                 except Exception as e:
                     expl.append(f"Inference failed: {e}")
             else:
                 expl.append("No timing sequence available — skipped.")
         return RiskResult(provider_name="BeaconBehavioral (VarCNN)", risk_score=score,
-                          confidence=self.CONFIDENCE_THRESHOLD if score < 0.1 else 1.0 - score,
+                          confidence=1.0 - score,  # high score = high confidence in risk
                           severity="HIGH" if score >= 0.7 else ("MEDIUM" if score >= 0.4 else "LOW"),
                           event_category="EXPLOIT" if score >= 0.5 else "NEUTRAL",
                           explanations=expl, raw_features=data)

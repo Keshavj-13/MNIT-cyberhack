@@ -27,6 +27,12 @@ class FeatureExtractor:
         ts = sorted(e.get("timestamp", 0) for e in events if e.get("timestamp"))
         features["inter_event_timings"] = [ts[i+1] - ts[i] for i in range(len(ts) - 1)]
 
+        # last page_load URL fed to SocialEngineeringRiskProvider (URL phishing model)
+        page_urls = [e["data"].get("url") for e in events
+                     if e.get("type") == "session" and isinstance(e.get("data"), dict) and e["data"].get("url")]
+        if page_urls:
+            features["current_url"] = page_urls[-1]
+
         return features
 
     def _empty_features(self) -> Dict[str, Any]:
