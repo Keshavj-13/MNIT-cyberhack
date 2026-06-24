@@ -22,9 +22,11 @@ models/*.pkl
 *.pkl
 
 # Databases
-security_platform.db
 *.db
 *.sqlite
+
+# Scratch / training experiments
+scratch/
 
 # Environments & Secrets
 .env

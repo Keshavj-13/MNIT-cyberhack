@@ -6,9 +6,8 @@ from typing import Dict, Any, List
 
 from src.engine.registry import ProviderRegistry
 from src.providers.implementations import (
-    TransactionRiskProvider, PhishingRiskProvider, 
-    SocialEngineeringRiskProvider, AccountTakeoverProvider, 
-    DeviceTrustProvider, NetworkRiskProvider
+    TransactionRiskProvider, SocialEngineeringRiskProvider,
+    AccountTakeoverProvider, DeviceTrustProvider, NetworkRiskProvider
 )
 
 app = FastAPI(title="MNIT Research Showcase Portal API", version="1.0.0")
@@ -31,7 +30,6 @@ def bootstrap_showcase():
     registry.register_provider(AccountTakeoverProvider())
     registry.register_provider(NetworkRiskProvider())
     registry.register_provider(DeviceTrustProvider())
-    registry.register_provider(PhishingRiskProvider())
 
 bootstrap_showcase()
 

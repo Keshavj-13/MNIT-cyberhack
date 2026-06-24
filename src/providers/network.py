@@ -8,7 +8,7 @@ class NetworkRiskProvider(RiskProvider):
         try:
             self.model = joblib.load(model_path)
             self.importance = joblib.load(importance_path)
-        except:
+        except Exception:
             self.model = None
             self.importance = {}
 

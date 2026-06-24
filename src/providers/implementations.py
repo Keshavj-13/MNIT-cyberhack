@@ -101,7 +101,7 @@ class TransactionRiskProvider(RiskProvider):
                 score = float(self.model.predict_proba(X)[0, 1])
                 expl.append(f"ML Score: {score:.4f} (threshold={self.threshold:.3f})")
             except Exception as e:
-                expl.append(f"ML Inference failed: {e}. Using fallback."); score = 0.5
+                expl.append(f"ML Inference failed: {e}. Using fallback."); score = 0.1
         if data.get("amount", 0) > 10000:
             score = max(score, 0.9); expl.append("High amount alert (>10k)")
         return RiskResult(provider_name="TransactionRisk", risk_score=score, confidence=0.95,
@@ -169,31 +169,23 @@ class SocialEngineeringRiskProvider(RiskProvider):
 
 
 class NetworkRiskProvider(RiskProvider):
-    def __init__(self, model_path="models/artifacts/environment_risk.joblib",
-                 features_path="models/artifacts/environment_features.joblib"):
-        self.model = None
-        self.platt_a, self.platt_b, self.features = 1.0, 0.0, []
-        self.model_info = {"model_path": model_path, "model_loaded": False, "mode": "fallback",
-                           "note": "Official Environment Risk Model (SIMARGL2021, part1+part2 sample, 4 traffic classes)."}
-        if os.path.exists(model_path) and os.path.exists(features_path):
-            try:
-                self.model, self.platt_a, self.platt_b = _load_calibrated_bundle(model_path)
-                self.features = joblib.load(features_path)
-                self.model_info.update({"model_loaded": True, "mode": "ml"})
-            except Exception as e:
-                self.model_info["note"] += f" (Load failed: {e})"
+    # ponytail: SIMARGL packet-level model never fires (no packet features at inference)
+    # replaced with heuristics on HTTP session metadata that ARE available at runtime
+    def __init__(self, *_, **__):
+        self.model_info = {"mode": "heuristic", "model_loaded": False,
+                           "note": "HTTP session heuristics (VPN, proxy, TOR, impossible geo)."}
 
     def evaluate(self, data: Dict[str, Any]) -> RiskResult:
-        score, expl = 0.05, ["Official Environment Risk Model (Simargl-Net)"]
-        if self.model and self.features:
-            try:
-                X = pd.DataFrame([data]).reindex(columns=self.features, fill_value=0)
-                raw = float(self.model.predict_proba(X)[0, 1])
-                score = _apply_platt(raw, self.platt_a, self.platt_b)
-                expl.append(f"ML Network Score: {score:.4f} (raw={raw:.4f})")
-            except Exception as e:
-                expl.append(f"ML Inference failed: {e}")
-        return RiskResult(provider_name="NetworkRisk (Official)", risk_score=score, confidence=0.98,
+        score, expl = 0.05, ["Network heuristics (session metadata)"]
+        if data.get("vpn_detected") or data.get("proxy_detected"):
+            score = max(score, 0.4); expl.append("VPN/proxy detected.")
+        if data.get("tor_detected"):
+            score = max(score, 0.75); expl.append("TOR exit node detected.")
+        if data.get("impossible_geo"):
+            score = max(score, 0.8); expl.append("Impossible geo-velocity (location jump).")
+        if data.get("blacklisted_ip"):
+            score = max(score, 0.9); expl.append("IP on threat intelligence blocklist.")
+        return RiskResult(provider_name="NetworkRisk", risk_score=score, confidence=0.85,
                           severity="HIGH" if score > 0.7 else "LOW",
                           event_category="EXPLOIT" if score > 0.5 else "NEUTRAL",
                           explanations=expl, raw_features=data)
@@ -265,6 +257,7 @@ class BeaconBehavioralProvider(RiskProvider):
 
     def __init__(self, model_path="models/beacon/best_model_varcnn_60WS_90OL_seq1024_thr0.99.pth"):
         self.net = None
+        self._session_cache: Dict[str, int] = {}  # session_id → last top_cls for consistency check
         self.model_info = {"model_path": model_path, "model_loaded": False, "mode": "fallback",
                            "note": "BEACON VarCNN (Singh et al. 2026, arXiv:2605.10867). 60WS/90OL/seq1024/thr0.99."}
         if not _TORCH or not os.path.exists(model_path): return
@@ -296,12 +289,19 @@ class BeaconBehavioralProvider(RiskProvider):
                     with torch.no_grad():
                         probs = torch.softmax(self.net(seq, meta), dim=-1)
                     top_prob, top_cls = float(probs.max()), int(probs.argmax())
-                    if top_prob >= self.CONFIDENCE_THRESHOLD:
-                        expl.append(f"Identity confirmed: user-{top_cls:02d} ({top_prob*100:.1f}%)")
-                    else:
-                        # below threshold the model is ambiguous — scale risk by how far below we are
+
+                    # within-session consistency: model was trained on 28 fixed identities so
+                    # absolute class match is meaningless for new users; class *change* mid-session is the signal
+                    sid = data.get("session_id", "")
+                    if sid and sid in self._session_cache and self._session_cache[sid] != top_cls:
+                        score = min(0.85, score + 0.6)
+                        expl.append(f"Mid-session identity shift: {self._session_cache[sid]}→{top_cls} (impostor signal)")
+                    elif top_prob < self.CONFIDENCE_THRESHOLD:
                         score = min(0.95, (1.0 - top_prob) * 0.8)
                         expl.append(f"Fingerprint mismatch: best user-{top_cls:02d} at {top_prob*100:.1f}% → risk {score:.2f}")
+                    else:
+                        expl.append(f"Identity consistent: user-{top_cls:02d} ({top_prob*100:.1f}%)")
+                    if sid: self._session_cache[sid] = top_cls
                 except Exception as e:
                     expl.append(f"Inference failed: {e}")
             else:

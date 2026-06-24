@@ -9,12 +9,12 @@ class ContextRiskProvider(RiskProvider):
     def __init__(self):
         try:
             self.sms_model = joblib.load("models/sms_scam_model.joblib")
-        except:
+        except Exception:
             self.sms_model = None
             
         try:
             self.phish_model = joblib.load("models/phishing_url_model.joblib")
-        except:
+        except Exception:
             self.phish_model = None
 
     def evaluate(self, data: Dict[str, Any]) -> RiskResult:
@@ -45,7 +45,7 @@ class ContextRiskProvider(RiskProvider):
                 confidences.append(abs(sms_prob - 0.5) * 2)
                 if sms_prob > 0.6:
                     factors.append("Recent suspicious SMS detected")
-            except:
+            except Exception:
                 pass
                 
         # 2. Phishing URL Detection
@@ -58,7 +58,7 @@ class ContextRiskProvider(RiskProvider):
                 confidences.append(abs(phish_prob - 0.5) * 2)
                 if phish_prob > 0.6:
                     factors.append("Navigation from malicious URL")
-            except:
+            except Exception:
                 pass
 
         # 3. Basic Contextual Rules

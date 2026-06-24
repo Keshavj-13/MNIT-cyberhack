@@ -112,9 +112,10 @@ class RiskEngine:
         # capped by its weight (e.g. SocialEngineering's ~0.17), so the
         # aggregate can never exceed 0.7 from one category alone and this
         # check could never fire.
-        has_recent_lure = any(e.category_scores.get("LURE", 0.0) > 0.7 for e in history[-5:])
-        has_recent_hook = any(e.category_scores.get("HOOK", 0.0) > 0.7 for e in history[-5:])
-        has_recent_exploit = any(e.category_scores.get("EXPLOIT", 0.0) > 0.7 for e in history[-5:])
+        # ponytail: 0.5 not 0.7 — providers score 0.5-0.9 on real attacks; 0.7 never fired
+        has_recent_lure = any(e.category_scores.get("LURE", 0.0) > 0.5 for e in history[-5:])
+        has_recent_hook = any(e.category_scores.get("HOOK", 0.0) > 0.5 for e in history[-5:])
+        has_recent_exploit = any(e.category_scores.get("EXPLOIT", 0.0) > 0.5 for e in history[-5:])
 
         current_cats = [r.event_category for r in current_results.values() if r.risk_score > 0.5]
 

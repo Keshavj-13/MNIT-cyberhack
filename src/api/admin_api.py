@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Depends, HTTPException, Body, Cookie, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -44,18 +45,16 @@ def admin_login(payload: Dict[str, str] = Body(...), response: Response = Respon
     password = payload.get("password")
     
     # In a real app we'd verify admin credentials. For demo, we enforce a nominal password.
-    if username != "admin" or password != "admin123":
+    _admin_user = os.environ.get("ADMIN_USERNAME", "admin")
+    _admin_pass = os.environ.get("ADMIN_PASSWORD", "admin123")
+    if username != _admin_user or password != _admin_pass:
         raise HTTPException(status_code=401, detail="Invalid administrator credentials")
-        
-    token = create_jwt_token(username, "admin", expires_in_minutes=15) # Short administrative session (15m)
-    
+
+    token = create_jwt_token(username, "admin", expires_in_minutes=15)
     response.set_cookie(
-        key="admin_session",
-        value=token,
-        httponly=True,
-        secure=False, # Set to True in production
-        samesite="strict",
-        path="/admin"
+        key="admin_session", value=token, httponly=True,
+        secure=os.environ.get("SECURE_COOKIES", "false").lower() == "true",
+        samesite="strict", path="/admin"
     )
     return {"status": "success", "username": username}
 

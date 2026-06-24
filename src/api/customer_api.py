@@ -91,17 +91,21 @@ def encrypt_response(data: Any, cust_session: CustomerSession) -> Dict[str, Any]
 
 # Helper to handle key shuffling/rotation when risk level escalates
 def shuffle_session_key(cust_session: CustomerSession, new_risk_level: int, db: Session) -> Tuple[str, int]:
-    """Generates a new AES session key, increments key version, and updates risk level."""
     new_key = generate_aes_key()
     cust_session.aes_key = new_key
     cust_session.key_version += 1
     cust_session.risk_level = new_risk_level
-    
     if new_risk_level >= 4:
-        cust_session.is_active = False # Disable session completely on containment
-        
+        cust_session.is_active = False
     db.commit()
     return new_key, cust_session.key_version
+
+def maybe_deescalate(cust_session: CustomerSession, eval_result, db: Session):
+    # step risk down one level if current eval is clean and session is elevated
+    # ponytail: one-level step-down per clean event — avoids abrupt drops, no timer needed
+    if cust_session.risk_level > 1 and eval_result.escalation_level == 1:
+        cust_session.risk_level = max(1, cust_session.risk_level - 1)
+        db.commit()
 
 from typing import Tuple
 
@@ -121,11 +125,35 @@ def validate_password(password: str) -> Tuple[bool, str]:
         return False, "Password must contain at least one special character."
     return True, "Password is strong."
 
+import hmac as _hmac
+
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+    # PBKDF2-SHA256 with random salt — resists rainbow tables unlike bare SHA-256
+    salt = secrets.token_hex(16)
+    h = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 260000)
+    return f"{salt}:{h.hex()}"
+
+def verify_password(password: str, stored: str) -> bool:
+    try:
+        salt, h = stored.split(':', 1)
+        expected = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 260000)
+        return _hmac.compare_digest(expected.hex(), h)
+    except Exception:
+        return False
 
 def hash_otp(otp: str) -> str:
-    return hashlib.sha256(otp.encode('utf-8')).hexdigest()
+    # OTP space is only 1M values — high iteration count slows brute force
+    salt = secrets.token_hex(8)
+    h = hashlib.pbkdf2_hmac('sha256', otp.encode(), salt.encode(), 100000)
+    return f"{salt}:{h.hex()}"
+
+def verify_otp(otp: str, stored: str) -> bool:
+    try:
+        salt, h = stored.split(':', 1)
+        expected = hashlib.pbkdf2_hmac('sha256', otp.encode(), salt.encode(), 100000)
+        return _hmac.compare_digest(expected.hex(), h)
+    except Exception:
+        return False
 
 # --- OTP Email Sending ---
 
@@ -311,7 +339,7 @@ def verify_otp_endpoint(payload: Dict[str, str] = Body(...), db: Session = Depen
         raise HTTPException(status_code=429, detail="Too many incorrect attempts. Please request a new code.")
     
     # Verify hash
-    if hash_otp(otp_code) != otp_record.otp_hash:
+    if not verify_otp(otp_code, otp_record.otp_hash):
         otp_record.attempts += 1
         db.commit()
         remaining = 5 - otp_record.attempts
@@ -355,7 +383,7 @@ def login(payload: Dict[str, str] = Body(...), response: Response = Response(), 
         raise HTTPException(status_code=401, detail="Invalid username or password.")
     
     # Verify password hash
-    if user.password_hash != hash_password(password):
+    if not verify_password(password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid username or password.")
     
     # Check account is active
@@ -397,7 +425,7 @@ def login(payload: Dict[str, str] = Body(...), response: Response = Response(), 
         key="customer_session",
         value=token,
         httponly=True,
-        secure=False, # Set to True in production
+        secure=os.environ.get("SECURE_COOKIES", "false").lower() == "true",
         samesite="strict",
         path="/customer"
     )
@@ -516,6 +544,7 @@ def get_beneficiaries(payload: EncryptedPayload = Body(...), user = Depends(get_
         new_key = None
         new_version = cust_session.key_version
         
+        maybe_deescalate(cust_session, eval_result, db)
         if eval_result.escalation_level > cust_session.risk_level:
             # Shuffle keys!
             new_key, new_version = shuffle_session_key(cust_session, eval_result.escalation_level, db)
@@ -594,32 +623,26 @@ def transfer(payload: EncryptedPayload = Body(...), user = Depends(get_current_u
 
 @app.post("/customer/telemetry")
 def telemetry(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
-    # Telemetry comes in silently, optionally encrypted or standard JSON.
-    # To ensure telemetry is never interrupted, if it has 'ciphertext' encrypt block, decrypt it.
-    session_id = payload.get("session_id", "UNKNOWN")
-    key_version = payload.get("key_version", 1)
-    
+    session_id = payload.get("session_id", "")
+    # reject telemetry from unknown/inactive sessions to prevent score injection
+    cust_session = db.query(CustomerSession).filter(
+        CustomerSession.session_id == session_id, CustomerSession.is_active == True
+    ).first()
+    if not cust_session:
+        raise HTTPException(status_code=401, detail="Invalid or inactive session")
+
     events = []
     if "ciphertext" in payload:
-        cust_session = db.query(CustomerSession).filter(CustomerSession.session_id == session_id).first()
-        if cust_session and cust_session.is_active:
-            try:
-                decrypted_str = decrypt_aes_gcm(payload["ciphertext"], payload["nonce"], payload["tag"], cust_session.aes_key)
-                events = json.loads(decrypted_str).get("events", [])
-            except Exception as e:
-                print(f"[TELEMETRY ERROR] Decryption failed: {str(e)}")
-                return {"status": "error", "message": "Telemetry decryption failed"}
+        try:
+            decrypted_str = decrypt_aes_gcm(payload["ciphertext"], payload["nonce"], payload["tag"], cust_session.aes_key)
+            events = json.loads(decrypted_str).get("events", [])
+        except Exception as e:
+            return {"status": "error", "message": "Telemetry decryption failed"}
     else:
         events = payload.get("events", [])
-        
+
     for event in events:
-        db_telemetry = TelemetryData(
-            session_id=session_id,
-            type=event.get("type"),
-            data=event.get("data")
-        )
-        db.add(db_telemetry)
-    
+        db.add(TelemetryData(session_id=session_id, type=event.get("type"), data=event.get("data")))
     db.commit()
     return {"status": "success", "count": len(events)}
 

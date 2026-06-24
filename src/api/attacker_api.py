@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Depends, HTTPException, Body, Cookie, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -44,18 +45,16 @@ def attacker_login(payload: Dict[str, str] = Body(...), response: Response = Res
     username = payload.get("username")
     password = payload.get("password")
     
-    if username != "attacker" or password != "attack123":
+    _att_user = os.environ.get("ATTACKER_USERNAME", "attacker")
+    _att_pass = os.environ.get("ATTACKER_PASSWORD", "attack123")
+    if username != _att_user or password != _att_pass:
         raise HTTPException(status_code=401, detail="Invalid simulator credentials")
-        
+
     token = create_jwt_token(username, "attacker", expires_in_minutes=60)
-    
     response.set_cookie(
-        key="attacker_session",
-        value=token,
-        httponly=True,
-        secure=False,
-        samesite="strict",
-        path="/attacker"
+        key="attacker_session", value=token, httponly=True,
+        secure=os.environ.get("SECURE_COOKIES", "false").lower() == "true",
+        samesite="strict", path="/attacker"
     )
     return {"status": "success", "username": username}
 
