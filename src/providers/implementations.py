@@ -313,6 +313,7 @@ class BeaconBehavioralProvider(RiskProvider):
                     sid = str(data.get("session_id", "")) if data.get("session_id") is not None else ""
 
                     # secondary stat check — catches gradual drift the VarCNN embedding misses
+                    # stat baseline only set AFTER embed baseline locked (prevents warmup poisoning)
                     raw = data.get("inter_event_timings", [])
                     stat_score = 0.0
                     if len(raw) >= 10:
@@ -323,13 +324,12 @@ class BeaconBehavioralProvider(RiskProvider):
                             cv = s_ / (m + 1e-9)
                             if sid and sid in self._stat_cache:
                                 bm, bcv = self._stat_cache[sid]
-                                mean_z = abs(m - bm) / (bm * 0.5 + 1e-9)  # normalised deviation
+                                mean_z = abs(m - bm) / (bm * 0.5 + 1e-9)
                                 cv_z   = abs(cv - bcv) / (bcv + 0.1)
                                 stat_score = min(0.8, (mean_z + cv_z) / 2)
                                 if stat_score > 0.3:
                                     expl.append(f"Stat drift: mean {bm:.0f}->{m:.0f}ms, CV {bcv:.2f}->{cv:.2f}")
-                            elif sid:
-                                self._stat_cache[sid] = (m, cv)
+                            # stat baseline is set below, only after embed baseline is locked
 
                     if norm < 1e-6:
                         score = max(0.4, stat_score)
@@ -350,8 +350,10 @@ class BeaconBehavioralProvider(RiskProvider):
                                 score = stat_score
                                 if score < 0.1:
                                     expl.append(f"Behavior consistent: cosine={cosine:.3f}")
-                                # only update baseline on consistent events (blocks gradual drift)
                                 self._embed_cache[sid] = 0.95 * baseline + 0.05 * emb_unit
+                                # stat baseline on first consistent post-lock call — not during warmup
+                                if sid and sid not in self._stat_cache and len(raw) >= 10:
+                                    self._stat_cache[sid] = (m, cv)
                         elif sid:
                             # warmup: collect _WARMUP embeddings before locking baseline
                             # prevents single-event poisoning
@@ -364,6 +366,9 @@ class BeaconBehavioralProvider(RiskProvider):
                                 if len(self._embed_cache) >= 1000: self._embed_cache.pop(next(iter(self._embed_cache)))
                                 self._embed_cache[sid] = baseline
                                 del self._warmup_buf[sid]
+                                # seed stat baseline from warmup timing so first-call poisoning can't set it
+                                if sid not in self._stat_cache and len(raw) >= 10:
+                                    self._stat_cache[sid] = (m, cv)
                                 expl.append(f"Baseline locked after {self._WARMUP} events.")
                             else:
                                 expl.append(f"Warming up ({len(buf)}/{self._WARMUP}).")
