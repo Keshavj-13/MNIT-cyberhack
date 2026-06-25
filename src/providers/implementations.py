@@ -261,9 +261,16 @@ class BeaconBehavioralProvider(RiskProvider):
     # embeddings from the GAP layer retain more discriminative signal than softmax outputs
     DRIFT_THRESHOLD = 0.92
 
+    # require this many consistent events before baseline is trusted
+    _WARMUP = 3
+
     def __init__(self, model_path="models/beacon/best_model_varcnn_60WS_90OL_seq1024_thr0.99.pth"):
         self.net = None
-        self._embed_cache: Dict[str, np.ndarray] = {}  # session_id → baseline GAP embedding
+        self._embed_cache: Dict[str, np.ndarray] = {}
+        # warmup buffers: collect first N embeddings before locking baseline
+        self._warmup_buf: Dict[str, list] = {}
+        # stat baselines: (mean_iet, cv_iet) per session for gradual-drift detection
+        self._stat_cache: Dict[str, tuple] = {}
         self.model_info = {"model_path": model_path, "model_loaded": False, "mode": "fallback",
                            "note": "BEACON VarCNN (Singh et al. 2026, arXiv:2605.10867). Embedding-drift mode."}
         if not _TORCH or not os.path.exists(model_path): return
@@ -279,16 +286,16 @@ class BeaconBehavioralProvider(RiskProvider):
         raw = data.get("inter_event_timings") or [data[k] for k in _META_KEYS if k in data]
         if len(raw) < 10: return None
         arr = np.array(raw, dtype=np.float32)
-        # do NOT z-score normalise — preserve relative timing scale so embeddings differ
-        # between fast-bot (5ms) and human (150ms); z-score collapses all to same N(0,1)
+        # sanitise NaN/Inf before min-max — poisoned inputs must not silently score safe
+        if not np.isfinite(arr).all():
+            arr = np.nan_to_num(arr, nan=0.0, posinf=1e6, neginf=0.0)
         rng = arr.max() - arr.min()
-        if rng > 0: arr = (arr - arr.min()) / rng  # min-max keeps shape, not location
+        if rng > 0: arr = (arr - arr.min()) / rng
         padded = np.zeros(1024, dtype=np.float32)
         padded[:min(len(arr), 1024)] = arr[:1024]
         return torch.tensor(padded).unsqueeze(0).unsqueeze(0)
 
     def _embed(self, seq, meta):
-        """Extract 512-d GAP embedding from VarCNN backbone (before classifier)."""
         with torch.no_grad():
             x = F.relu(self.net.bn1(self.net.conv1(seq)))
             x = self.net.stage4(self.net.stage3(self.net.stage2(self.net.stage1(x))))
@@ -303,26 +310,66 @@ class BeaconBehavioralProvider(RiskProvider):
                     meta = torch.tensor([[float(data.get(k, 0)) for k in _META_KEYS]])
                     emb = self._embed(seq, meta)
                     norm = np.linalg.norm(emb)
-                    emb_unit = emb / (norm + 1e-9)
+                    sid = str(data.get("session_id", "")) if data.get("session_id") is not None else ""
 
-                    sid = data.get("session_id", "")
-                    if sid and sid in self._embed_cache:
-                        baseline = self._embed_cache[sid]
-                        cosine = float(np.dot(emb_unit, baseline))
-                        if cosine < self.DRIFT_THRESHOLD:
-                            score = min(0.9, 1.0 - cosine)
-                            expl.append(f"Behavioral drift detected: cosine={cosine:.3f} < {self.DRIFT_THRESHOLD} -> risk {score:.2f}")
-                        else:
-                            expl.append(f"Behavior consistent: cosine={cosine:.3f}")
+                    # secondary stat check — catches gradual drift the VarCNN embedding misses
+                    raw = data.get("inter_event_timings", [])
+                    stat_score = 0.0
+                    if len(raw) >= 10:
+                        arr_raw = np.array(raw, dtype=np.float32)
+                        arr_raw = arr_raw[np.isfinite(arr_raw)]
+                        if len(arr_raw) >= 10:
+                            m, s_ = float(arr_raw.mean()), float(arr_raw.std())
+                            cv = s_ / (m + 1e-9)
+                            if sid and sid in self._stat_cache:
+                                bm, bcv = self._stat_cache[sid]
+                                mean_z = abs(m - bm) / (bm * 0.5 + 1e-9)  # normalised deviation
+                                cv_z   = abs(cv - bcv) / (bcv + 0.1)
+                                stat_score = min(0.8, (mean_z + cv_z) / 2)
+                                if stat_score > 0.3:
+                                    expl.append(f"Stat drift: mean {bm:.0f}->{m:.0f}ms, CV {bcv:.2f}->{cv:.2f}")
+                            elif sid:
+                                self._stat_cache[sid] = (m, cv)
+
+                    if norm < 1e-6:
+                        score = max(0.4, stat_score)
+                        expl.append("Degenerate embedding — constant/invalid input sequence.")
                     else:
-                        expl.append("Baseline established for session.")
-                    if sid:
-                        if len(self._embed_cache) >= 1000: self._embed_cache.pop(next(iter(self._embed_cache)))
-                        # rolling average of embeddings to track gradual drift
-                        if sid in self._embed_cache:
-                            self._embed_cache[sid] = 0.7 * self._embed_cache[sid] + 0.3 * emb_unit
+                        emb_unit = emb / norm
+                        if sid and sid in self._embed_cache:
+                            baseline = self._embed_cache[sid]
+                            cosine = float(np.dot(emb_unit, baseline))
+                            if not np.isfinite(cosine):
+                                score = max(0.4, stat_score)
+                                expl.append("Non-finite cosine — suspect input.")
+                            elif cosine < self.DRIFT_THRESHOLD:
+                                embed_score = min(0.9, 1.0 - cosine)
+                                score = max(embed_score, stat_score)
+                                expl.append(f"Behavioral drift: cosine={cosine:.3f} -> risk {score:.2f}")
+                            else:
+                                score = stat_score
+                                if score < 0.1:
+                                    expl.append(f"Behavior consistent: cosine={cosine:.3f}")
+                                # only update baseline on consistent events (blocks gradual drift)
+                                self._embed_cache[sid] = 0.95 * baseline + 0.05 * emb_unit
+                        elif sid:
+                            # warmup: collect _WARMUP embeddings before locking baseline
+                            # prevents single-event poisoning
+                            if len(self._warmup_buf) >= 1000: self._warmup_buf.pop(next(iter(self._warmup_buf)))
+                            buf = self._warmup_buf.setdefault(sid, [])
+                            buf.append(emb_unit)
+                            if len(buf) >= self._WARMUP:
+                                baseline = np.mean(buf, axis=0)
+                                baseline /= (np.linalg.norm(baseline) + 1e-9)
+                                if len(self._embed_cache) >= 1000: self._embed_cache.pop(next(iter(self._embed_cache)))
+                                self._embed_cache[sid] = baseline
+                                del self._warmup_buf[sid]
+                                expl.append(f"Baseline locked after {self._WARMUP} events.")
+                            else:
+                                expl.append(f"Warming up ({len(buf)}/{self._WARMUP}).")
                         else:
-                            self._embed_cache[sid] = emb_unit
+                            score = stat_score
+                            expl.append("No session ID — stateless." if score < 0.1 else f"Stat anomaly (no session): risk {score:.2f}")
                 except Exception as e:
                     expl.append(f"Inference failed: {e}")
             else:
