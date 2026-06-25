@@ -283,10 +283,16 @@ class BeaconBehavioralProvider(RiskProvider):
             self.model_info["note"] += f" (Load failed: {e})"
 
     def _seq(self, data: Dict[str, Any]):
-        raw = data.get("inter_event_timings") or [data[k] for k in _META_KEYS if k in data]
-        if len(raw) < 10: return None
+        raw = data.get("inter_event_timings")
+        # explicit None check — `or` on numpy arrays raises ambiguity error
+        if raw is None:
+            raw = [data[k] for k in _META_KEYS if k in data]
+        # generators/iterables: materialise before len()
+        if not isinstance(raw, (list, tuple, np.ndarray)): raw = list(raw)
+        # require 64+ points — <64 (e.g. 10 META scalars) produces misleading embeddings
+        # when padded to 1024 and compared against a full-sequence baseline
+        if len(raw) < 64: return None
         arr = np.array(raw, dtype=np.float32)
-        # sanitise NaN/Inf before min-max — poisoned inputs must not silently score safe
         if not np.isfinite(arr).all():
             arr = np.nan_to_num(arr, nan=0.0, posinf=1e6, neginf=0.0)
         rng = arr.max() - arr.min()
@@ -353,6 +359,7 @@ class BeaconBehavioralProvider(RiskProvider):
                                 self._embed_cache[sid] = 0.95 * baseline + 0.05 * emb_unit
                                 # stat baseline on first consistent post-lock call — not during warmup
                                 if sid and sid not in self._stat_cache and len(raw) >= 10:
+                                    if len(self._stat_cache) >= 1000: self._stat_cache.pop(next(iter(self._stat_cache)))
                                     self._stat_cache[sid] = (m, cv)
                         elif sid:
                             # warmup: collect _WARMUP embeddings before locking baseline
@@ -368,6 +375,7 @@ class BeaconBehavioralProvider(RiskProvider):
                                 del self._warmup_buf[sid]
                                 # seed stat baseline from warmup timing so first-call poisoning can't set it
                                 if sid not in self._stat_cache and len(raw) >= 10:
+                                    if len(self._stat_cache) >= 1000: self._stat_cache.pop(next(iter(self._stat_cache)))
                                     self._stat_cache[sid] = (m, cv)
                                 expl.append(f"Baseline locked after {self._WARMUP} events.")
                             else:
