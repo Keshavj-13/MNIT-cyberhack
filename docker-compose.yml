@@ -34,25 +34,19 @@ services:
 
   # ── Python API services ────────────────────────────────────────────────────
   customer-api:
-    build: .
+    build: { context: ., dockerfile: Dockerfile }
     command: uvicorn src.api.customer_api:app --host 0.0.0.0 --port 8001
     ports: ["8001:8001"]
-    volumes:
-      - ./models:/app/models:ro
-      - db_data:/app/db
-    environment:
-      - ALLOW_DEFAULT_SECRETS=1
-      - SQLALCHEMY_DATABASE_URL=sqlite:////app/db/security_platform.db
+    volumes: [./models:/app/models:ro, db_data:/app/db]
+    environment: [ALLOW_DEFAULT_SECRETS=1, "SQLALCHEMY_DATABASE_URL=sqlite:////app/db/security_platform.db"]
     networks: [mnit]
     restart: unless-stopped
 
   admin-api:
-    build: .
+    build: { context: ., dockerfile: Dockerfile.admin }
     command: uvicorn src.api.admin_api:app --host 0.0.0.0 --port 8002
     ports: ["8002:8002"]
-    volumes:
-      - ./models:/app/models:ro
-      - db_data:/app/db
+    volumes: [./models:/app/models:ro, db_data:/app/db]
     environment:
       - ALLOW_DEFAULT_SECRETS=1
       - SQLALCHEMY_DATABASE_URL=sqlite:////app/db/security_platform.db
@@ -65,28 +59,20 @@ services:
     restart: unless-stopped
 
   attacker-api:
-    build: .
+    build: { context: ., dockerfile: Dockerfile }
     command: uvicorn src.api.attacker_api:app --host 0.0.0.0 --port 8003
     ports: ["8003:8003"]
-    volumes:
-      - ./models:/app/models:ro
-      - db_data:/app/db
-    environment:
-      - ALLOW_DEFAULT_SECRETS=1
-      - SQLALCHEMY_DATABASE_URL=sqlite:////app/db/security_platform.db
+    volumes: [./models:/app/models:ro, db_data:/app/db]
+    environment: [ALLOW_DEFAULT_SECRETS=1, "SQLALCHEMY_DATABASE_URL=sqlite:////app/db/security_platform.db"]
     networks: [mnit]
     restart: unless-stopped
 
   showcase-api:
-    build: .
+    build: { context: ., dockerfile: Dockerfile }
     command: uvicorn src.api.showcase_api:app --host 0.0.0.0 --port 8004
     ports: ["8004:8004"]
-    volumes:
-      - ./models:/app/models:ro
-      - db_data:/app/db
-    environment:
-      - ALLOW_DEFAULT_SECRETS=1
-      - SQLALCHEMY_DATABASE_URL=sqlite:////app/db/security_platform.db
+    volumes: [./models:/app/models:ro, db_data:/app/db]
+    environment: [ALLOW_DEFAULT_SECRETS=1, "SQLALCHEMY_DATABASE_URL=sqlite:////app/db/security_platform.db"]
     networks: [mnit]
     restart: unless-stopped
 

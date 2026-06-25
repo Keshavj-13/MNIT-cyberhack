@@ -12,9 +12,10 @@ pandas==3.0.3
 scipy==1.17.1
 scikit-learn==1.9.0
 lightgbm==4.6.0
-torch==2.12.0
-torchvision==0.22.0
-transformers==4.52.4
+# torch/torchvision installed via --index-url whl/cpu in Dockerfile; skip here
+# torch==2.12.0
+# torchvision==0.22.0
+# transformers only for local VLM fallback — Docker uses vLLM service instead
 Pillow==11.2.1
 shap==0.52.0
 matplotlib==3.10.9

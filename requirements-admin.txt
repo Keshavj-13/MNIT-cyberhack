@@ -1,0 +1,5 @@
+-r requirements-base.txt
+scipy==1.17.1
+shap==0.52.0
+matplotlib==3.10.9
+Pillow==11.2.1
