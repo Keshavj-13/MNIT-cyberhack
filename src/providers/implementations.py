@@ -256,11 +256,16 @@ class BeaconBehavioralProvider(RiskProvider):
     # 0.99 matches the training threshold used by the BEACON model creator
     CONFIDENCE_THRESHOLD = 0.99
 
+    # Cosine similarity threshold for within-session embedding drift
+    # ponytail: class predictions collapse to user-02 on banking data (distribution shift);
+    # embeddings from the GAP layer retain more discriminative signal than softmax outputs
+    DRIFT_THRESHOLD = 0.92
+
     def __init__(self, model_path="models/beacon/best_model_varcnn_60WS_90OL_seq1024_thr0.99.pth"):
         self.net = None
-        self._session_cache: Dict[str, int] = {}  # session_id → last top_cls; capped to avoid unbounded growth
+        self._embed_cache: Dict[str, np.ndarray] = {}  # session_id → baseline GAP embedding
         self.model_info = {"model_path": model_path, "model_loaded": False, "mode": "fallback",
-                           "note": "BEACON VarCNN (Singh et al. 2026, arXiv:2605.10867). 60WS/90OL/seq1024/thr0.99."}
+                           "note": "BEACON VarCNN (Singh et al. 2026, arXiv:2605.10867). Embedding-drift mode."}
         if not _TORCH or not os.path.exists(model_path): return
         try:
             net = _VarCNN()
@@ -271,46 +276,59 @@ class BeaconBehavioralProvider(RiskProvider):
             self.model_info["note"] += f" (Load failed: {e})"
 
     def _seq(self, data: Dict[str, Any]):
-        # inter_event_timings preserves real rhythm; scalar rollup is a last resort
         raw = data.get("inter_event_timings") or [data[k] for k in _META_KEYS if k in data]
         if len(raw) < 10: return None
         arr = np.array(raw, dtype=np.float32)
-        arr = (arr - arr.mean()) / (arr.std() + 1e-8)
+        # do NOT z-score normalise — preserve relative timing scale so embeddings differ
+        # between fast-bot (5ms) and human (150ms); z-score collapses all to same N(0,1)
+        rng = arr.max() - arr.min()
+        if rng > 0: arr = (arr - arr.min()) / rng  # min-max keeps shape, not location
         padded = np.zeros(1024, dtype=np.float32)
         padded[:min(len(arr), 1024)] = arr[:1024]
         return torch.tensor(padded).unsqueeze(0).unsqueeze(0)
 
+    def _embed(self, seq, meta):
+        """Extract 512-d GAP embedding from VarCNN backbone (before classifier)."""
+        with torch.no_grad():
+            x = F.relu(self.net.bn1(self.net.conv1(seq)))
+            x = self.net.stage4(self.net.stage3(self.net.stage2(self.net.stage1(x))))
+            return self.net.gap(x).squeeze(-1).squeeze(0).cpu().numpy()
+
     def evaluate(self, data: Dict[str, Any]) -> RiskResult:
-        score, expl = 0.05, ["BEACON VarCNN Behavioral Fingerprint"]
+        score, expl = 0.05, ["BEACON VarCNN behavioral fingerprint (embedding drift)"]
         if self.net:
             seq = self._seq(data)
             if seq is not None:
                 try:
                     meta = torch.tensor([[float(data.get(k, 0)) for k in _META_KEYS]])
-                    with torch.no_grad():
-                        probs = torch.softmax(self.net(seq, meta), dim=-1)
-                    top_prob, top_cls = float(probs.max()), int(probs.argmax())
+                    emb = self._embed(seq, meta)
+                    norm = np.linalg.norm(emb)
+                    emb_unit = emb / (norm + 1e-9)
 
-                    # within-session consistency: model was trained on 28 fixed identities so
-                    # absolute class match is meaningless for new users; class *change* mid-session is the signal
                     sid = data.get("session_id", "")
-                    if sid and sid in self._session_cache and self._session_cache[sid] != top_cls:
-                        score = min(0.85, score + 0.6)
-                        expl.append(f"Mid-session identity shift: {self._session_cache[sid]}→{top_cls} (impostor signal)")
-                    elif top_prob < self.CONFIDENCE_THRESHOLD:
-                        score = min(0.95, (1.0 - top_prob) * 0.8)
-                        expl.append(f"Fingerprint mismatch: best user-{top_cls:02d} at {top_prob*100:.1f}% → risk {score:.2f}")
+                    if sid and sid in self._embed_cache:
+                        baseline = self._embed_cache[sid]
+                        cosine = float(np.dot(emb_unit, baseline))
+                        if cosine < self.DRIFT_THRESHOLD:
+                            score = min(0.9, 1.0 - cosine)
+                            expl.append(f"Behavioral drift detected: cosine={cosine:.3f} < {self.DRIFT_THRESHOLD} -> risk {score:.2f}")
+                        else:
+                            expl.append(f"Behavior consistent: cosine={cosine:.3f}")
                     else:
-                        expl.append(f"Identity consistent: user-{top_cls:02d} ({top_prob*100:.1f}%)")
+                        expl.append("Baseline established for session.")
                     if sid:
-                        if len(self._session_cache) > 1000: self._session_cache.pop(next(iter(self._session_cache)))
-                        self._session_cache[sid] = top_cls
+                        if len(self._embed_cache) >= 1000: self._embed_cache.pop(next(iter(self._embed_cache)))
+                        # rolling average of embeddings to track gradual drift
+                        if sid in self._embed_cache:
+                            self._embed_cache[sid] = 0.7 * self._embed_cache[sid] + 0.3 * emb_unit
+                        else:
+                            self._embed_cache[sid] = emb_unit
                 except Exception as e:
                     expl.append(f"Inference failed: {e}")
             else:
-                expl.append("No timing sequence available — skipped.")
+                expl.append("No timing sequence — skipped.")
         return RiskResult(provider_name="BeaconBehavioral (VarCNN)", risk_score=score,
-                          confidence=1.0 - score,  # high score = high confidence in risk
+                          confidence=1.0 - score,
                           severity="HIGH" if score >= 0.7 else ("MEDIUM" if score >= 0.4 else "LOW"),
                           event_category="EXPLOIT" if score >= 0.5 else "NEUTRAL",
                           explanations=expl, raw_features=data)
