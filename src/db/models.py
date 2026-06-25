@@ -76,6 +76,21 @@ class OTPVerification(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     is_used = Column(Boolean, default=False)
 
+class AriaInvestigation(Base):
+    __tablename__ = "aria_investigations"
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+    cluster_key = Column(String, index=True)          # user_id being investigated
+    cluster_event_ids = Column(JSON)                  # [int, ...]
+    cycle = Column(Integer, default=1)                # how many ARIA passes touched this
+    hypothesis = Column(String)
+    classification = Column(String)                   # social_eng_chain, ato_fraud, coordinated, unknown
+    evidence_summary = Column(String)
+    vlm_assessment = Column(String)                   # Qwen's visual analysis
+    confidence = Column(Float, default=0.0)
+    status = Column(String, default="open")           # open / resolved / fp_confirmed
+
 class RevokedToken(Base):
     __tablename__ = "revoked_tokens"
     
@@ -84,7 +99,8 @@ class RevokedToken(Base):
     revoked_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 # DB Session setup
-SQLALCHEMY_DATABASE_URL = "sqlite:///./security_platform.db"
+import os as _os
+SQLALCHEMY_DATABASE_URL = _os.environ.get("SQLALCHEMY_DATABASE_URL", "sqlite:///./security_platform.db")
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

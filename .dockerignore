@@ -1,0 +1,17 @@
+env/
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.py[cod]
+node_modules/
+ui/node_modules/
+.git/
+*.db
+*.sqlite
+datasets/
+reports/research/
+catboost_info/
+.ipynb_checkpoints/
+scratch/
+screenshots/
