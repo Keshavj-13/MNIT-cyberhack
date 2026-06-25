@@ -2,8 +2,17 @@ FROM python:3.12-slim
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ libgomp1 curl && rm -rf /var/lib/apt/lists/*
 COPY requirements-admin.txt requirements-base.txt ./
-# torch CPU-only — separate layer so it caches independently
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements-admin.txt
+
+# bake Qwen3.5-0.8B weights into the image layer at build time
+# Docker caches this layer — never re-downloads unless Dockerfile changes
+ARG HF_TOKEN=""
+ENV HF_TOKEN=${HF_TOKEN}
+RUN python -c "\
+from transformers import AutoProcessor, AutoModelForMultimodalLM; \
+AutoProcessor.from_pretrained('Qwen/Qwen3.5-0.8B'); \
+AutoModelForMultimodalLM.from_pretrained('Qwen/Qwen3.5-0.8B')"
+
 COPY . .
 ENV PYTHONUNBUFFERED=1

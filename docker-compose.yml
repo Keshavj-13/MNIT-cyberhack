@@ -1,38 +1,13 @@
 version: "3.9"
 
 volumes:
-  hf_cache:     # Qwen model weights cached across restarts
-  db_data:      # SQLite file persisted
+  db_data:    # SQLite persisted across restarts
 
 networks:
   mnit:
 
 services:
 
-  # ── Qwen3.5-0.8B VLM served via vLLM OpenAI-compatible API ──────────────
-  qwen:
-    image: vllm/vllm-openai:latest
-    command: >
-      --model Qwen/Qwen3.5-0.8B
-      --port 8000
-      --max-model-len 8192
-      --dtype float16
-      --device cpu
-    ports:
-      - "8000:8000"
-    volumes:
-      - hf_cache:/root/.cache/huggingface
-    environment:
-      - HF_TOKEN=${HF_TOKEN:-}
-    networks: [mnit]
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 120s   # model download on first start
-
-  # ── Python API services ────────────────────────────────────────────────────
   customer-api:
     build: { context: ., dockerfile: Dockerfile }
     command: uvicorn src.api.customer_api:app --host 0.0.0.0 --port 8001
@@ -46,16 +21,14 @@ services:
     build: { context: ., dockerfile: Dockerfile.admin }
     command: uvicorn src.api.admin_api:app --host 0.0.0.0 --port 8002
     ports: ["8002:8002"]
-    volumes: [./models:/app/models:ro, db_data:/app/db]
+    volumes:
+      - ./models:/app/models:ro
+      - db_data:/app/db
     environment:
       - ALLOW_DEFAULT_SECRETS=1
       - SQLALCHEMY_DATABASE_URL=sqlite:////app/db/security_platform.db
-      - VLM_API_URL=http://qwen:8000/v1
       - VLM_MODEL=Qwen/Qwen3.5-0.8B
     networks: [mnit]
-    depends_on:
-      qwen:
-        condition: service_healthy
     restart: unless-stopped
 
   attacker-api:
@@ -76,17 +49,11 @@ services:
     networks: [mnit]
     restart: unless-stopped
 
-  # ── React UI ───────────────────────────────────────────────────────────────
   ui:
     build:
       context: ui
       dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
+    ports: ["3000:3000"]
     networks: [mnit]
-    depends_on:
-      - customer-api
-      - admin-api
-      - attacker-api
-      - showcase-api
+    depends_on: [customer-api, admin-api, attacker-api, showcase-api]
     restart: unless-stopped
