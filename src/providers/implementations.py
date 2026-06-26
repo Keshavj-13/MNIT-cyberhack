@@ -13,49 +13,48 @@ try:
 except ImportError:
     _TORCH = False
 
+if _TORCH:
+    # Checkpoint uses .conv.weight keys — bare Conv1d would mismatch
+    class _W(nn.Module):
+        def __init__(self, i, o, k, p=0): super().__init__(); self.conv = nn.Conv1d(i, o, k, padding=p, bias=True)
+        def forward(self, x): return self.conv(x)
 
-# Checkpoint uses .conv.weight keys — bare Conv1d would mismatch
-class _W(nn.Module):
-    def __init__(self, i, o, k, p=0): super().__init__(); self.conv = nn.Conv1d(i, o, k, padding=p, bias=True)
-    def forward(self, x): return self.conv(x)
+    class _IB(nn.Module):
+        def __init__(self, c):
+            super().__init__()
+            self.conv1, self.bn1 = _W(c, c, 3, 1), nn.BatchNorm1d(c)
+            self.conv2, self.bn2 = _W(c, c, 3, 1), nn.BatchNorm1d(c)
+        def forward(self, x):
+            return F.relu(self.bn2(self.conv2(F.relu(self.bn1(self.conv1(x))))) + x)
 
-class _IB(nn.Module):
-    def __init__(self, c):
-        super().__init__()
-        self.conv1, self.bn1 = _W(c, c, 3, 1), nn.BatchNorm1d(c)
-        self.conv2, self.bn2 = _W(c, c, 3, 1), nn.BatchNorm1d(c)
-    def forward(self, x):
-        return F.relu(self.bn2(self.conv2(F.relu(self.bn1(self.conv1(x))))) + x)
+    class _PB(nn.Module):
+        # First conv in transition blocks is unwrapped in checkpoint; second is wrapped
+        def __init__(self, i, o):
+            super().__init__()
+            self.conv1, self.bn1 = nn.Conv1d(i, o, 3, padding=1, bias=True), nn.BatchNorm1d(o)
+            self.conv2, self.bn2 = _W(o, o, 3, 1), nn.BatchNorm1d(o)
+            self.skip = nn.Sequential(nn.Conv1d(i, o, 1, bias=True), nn.BatchNorm1d(o))
+        def forward(self, x):
+            return F.relu(self.bn2(self.conv2(F.relu(self.bn1(self.conv1(x))))) + self.skip(x))
 
-class _PB(nn.Module):
-    # First conv in transition blocks is unwrapped in checkpoint; second is wrapped
-    def __init__(self, i, o):
-        super().__init__()
-        self.conv1, self.bn1 = nn.Conv1d(i, o, 3, padding=1, bias=True), nn.BatchNorm1d(o)
-        self.conv2, self.bn2 = _W(o, o, 3, 1), nn.BatchNorm1d(o)
-        self.skip = nn.Sequential(nn.Conv1d(i, o, 1, bias=True), nn.BatchNorm1d(o))
-    def forward(self, x):
-        return F.relu(self.bn2(self.conv2(F.relu(self.bn1(self.conv1(x))))) + self.skip(x))
+    class _VarCNN(nn.Module):
+        # Architecture reverse-engineered from checkpoint key shapes
+        def __init__(self):
+            super().__init__()
+            self.conv1, self.bn1 = nn.Conv1d(1, 64, 7, padding=3, bias=True), nn.BatchNorm1d(64)
+            self.stage1 = nn.Sequential(_IB(64), _IB(64))
+            self.stage2 = nn.Sequential(_PB(64, 128), _IB(128))
+            self.stage3 = nn.Sequential(_PB(128, 256), _IB(256))
+            self.stage4 = nn.Sequential(_PB(256, 512), _IB(512))
+            self.gap = nn.AdaptiveAvgPool1d(1)
+            self.metadata_fc = nn.Sequential(nn.Linear(10, 128, bias=True), nn.BatchNorm1d(128))
+            self.classifier = nn.Sequential(nn.Flatten(), nn.Linear(640, 512), nn.BatchNorm1d(512), nn.ReLU(), nn.Dropout(0.5), nn.Linear(512, 28))
 
-class _VarCNN(nn.Module):
-    # Architecture reverse-engineered from checkpoint key shapes
-    def __init__(self):
-        super().__init__()
-        self.conv1, self.bn1 = nn.Conv1d(1, 64, 7, padding=3, bias=True), nn.BatchNorm1d(64)
-        self.stage1 = nn.Sequential(_IB(64), _IB(64))
-        self.stage2 = nn.Sequential(_PB(64, 128), _IB(128))
-        self.stage3 = nn.Sequential(_PB(128, 256), _IB(256))
-        self.stage4 = nn.Sequential(_PB(256, 512), _IB(512))
-        self.gap = nn.AdaptiveAvgPool1d(1)
-        self.metadata_fc = nn.Sequential(nn.Linear(10, 128, bias=True), nn.BatchNorm1d(128))
-        # index 0 is Flatten (not saved), 1=Linear, 2=BN, 3=ReLU, 4=Dropout, 5=Linear
-        self.classifier = nn.Sequential(nn.Flatten(), nn.Linear(640, 512), nn.BatchNorm1d(512), nn.ReLU(), nn.Dropout(0.5), nn.Linear(512, 28))
-
-    def forward(self, x, meta=None):
-        x = self.stage4(self.stage3(self.stage2(self.stage1(F.relu(self.bn1(self.conv1(x)))))))
-        gap = self.gap(x).squeeze(-1)
-        if meta is None: meta = torch.zeros(gap.size(0), 10, device=gap.device)
-        return self.classifier(torch.cat([gap, F.relu(self.metadata_fc(meta))], dim=1))
+        def forward(self, x, meta=None):
+            x = self.stage4(self.stage3(self.stage2(self.stage1(F.relu(self.bn1(self.conv1(x)))))))
+            gap = self.gap(x).squeeze(-1)
+            if meta is None: meta = torch.zeros(gap.size(0), 10, device=gap.device)
+            return self.classifier(torch.cat([gap, F.relu(self.metadata_fc(meta))], dim=1))
 
 
 def _apply_platt(raw_score: float, a: float, b: float) -> float:
