@@ -1,63 +1,46 @@
 version: "3.9"
 
 volumes:
-  db_data:    # SQLite persisted across restarts
-
-networks:
-  mnit:
+  db_data:
 
 services:
 
   customer-api:
     build: { context: ., dockerfile: Dockerfile }
     command: uvicorn src.api.customer_api:app --host 0.0.0.0 --port 8001
-    ports: ["8001:8001"]
+    network_mode: host
     volumes: [./models:/app/models:ro, db_data:/app/db]
     environment: [ALLOW_DEFAULT_SECRETS=1, "SQLALCHEMY_DATABASE_URL=sqlite:////app/db/security_platform.db"]
-    networks: [mnit]
     restart: unless-stopped
 
   admin-api:
     build: { context: ., dockerfile: Dockerfile.admin }
     command: uvicorn src.api.admin_api:app --host 0.0.0.0 --port 8002
-    ports: ["8002:8002"]
-    volumes:
-      - ./models:/app/models:ro
-      - db_data:/app/db
+    network_mode: host
+    volumes: [./models:/app/models:ro, db_data:/app/db]
     environment:
       - ALLOW_DEFAULT_SECRETS=1
       - SQLALCHEMY_DATABASE_URL=sqlite:////app/db/security_platform.db
       - VLM_MODEL=Qwen/Qwen3.5-0.8B
-    networks: [mnit]
     restart: unless-stopped
 
   attacker-api:
     build: { context: ., dockerfile: Dockerfile }
     command: uvicorn src.api.attacker_api:app --host 0.0.0.0 --port 8003
-    ports: ["8003:8003"]
+    network_mode: host
     volumes: [./models:/app/models:ro, db_data:/app/db]
     environment: [ALLOW_DEFAULT_SECRETS=1, "SQLALCHEMY_DATABASE_URL=sqlite:////app/db/security_platform.db"]
-    networks: [mnit]
     restart: unless-stopped
 
   showcase-api:
     build: { context: ., dockerfile: Dockerfile }
     command: uvicorn src.api.showcase_api:app --host 0.0.0.0 --port 8004
-    ports: ["8004:8004"]
+    network_mode: host
     volumes: [./models:/app/models:ro, db_data:/app/db]
     environment: [ALLOW_DEFAULT_SECRETS=1, "SQLALCHEMY_DATABASE_URL=sqlite:////app/db/security_platform.db"]
-    networks: [mnit]
     restart: unless-stopped
 
   ui:
-    build:
-      context: ui
-      dockerfile: Dockerfile
-    ports:
-      - "3001:3001"
-      - "3002:3002"
-      - "3003:3003"
-      - "3004:3004"
-    networks: [mnit]
-    depends_on: [customer-api, admin-api, attacker-api, showcase-api]
+    build: { context: ui, dockerfile: Dockerfile }
+    network_mode: host
     restart: unless-stopped
