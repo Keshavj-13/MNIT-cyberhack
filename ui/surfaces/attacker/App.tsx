@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import {
   Flame, User, AlertTriangle, MessageSquare, UserX, Loader2, LogOut,
-  ShieldAlert, ShieldCheck, ShieldX, Play, ChevronRight, Target,
-  Zap, Lock, Unlock, TrendingUp, Activity, Sliders, RefreshCw, Plus
+  ShieldAlert, ShieldCheck, ShieldOff, Play, Target,
+  Zap, Lock, Unlock, TrendingUp, Activity, Sliders
 } from 'lucide-react';
 import { usePreferences } from './Preferences';
 
@@ -35,7 +35,7 @@ const LEVEL_META = [
   { label: 'ALLOW',      color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20', Icon: ShieldCheck },
   { label: 'CHALLENGE',  color: 'text-amber-400',   bg: 'bg-amber-500/10 border-amber-500/20',    Icon: ShieldAlert },
   { label: 'RESTRICT',   color: 'text-orange-400',  bg: 'bg-orange-500/10 border-orange-500/20',  Icon: ShieldAlert },
-  { label: 'CONTAIN',    color: 'text-red-400',      bg: 'bg-red-500/10 border-red-500/20',        Icon: ShieldX },
+  { label: 'CONTAIN',    color: 'text-red-400',      bg: 'bg-red-500/10 border-red-500/20',        Icon: ShieldOff },
 ];
 
 function RiskBar({ value, max = 1 }: { value: number; max?: number }) {
