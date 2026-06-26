@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { 
-  ShieldAlert, ShieldCheck, AlertCircle, Skull, Activity, Cpu, 
-  Database, LogOut, Lock, RefreshCw, Layers, Bell, Clock, Search, Terminal, Type
+import {
+  ShieldAlert, ShieldCheck, AlertCircle, Skull, Activity, Cpu,
+  Database, LogOut, RefreshCw, Layers, Bell, Clock, Search, Terminal,
+  Bot, BarChart2, Eye, CheckCircle2, XCircle, HelpCircle, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { usePreferences } from './Preferences';
 
@@ -15,6 +16,7 @@ const T: Record<string, any> = {
     tab_providers: 'Intelligence Providers',
     tab_timeline: 'Security Log Feed',
     tab_alerts: 'Incident Alert Stream',
+    tab_aria: 'ARIA Investigations',
   },
   hi: {
     header_title: 'एमएनआईटी सुरक्षा संचालन',
@@ -24,6 +26,7 @@ const T: Record<string, any> = {
     tab_providers: 'खुफिया प्रदाता',
     tab_timeline: 'सुरक्षा लॉग फ़ीड',
     tab_alerts: 'घटना अलर्ट स्ट्रीम',
+    tab_aria: 'ARIA जांच',
   }
 };
 
@@ -51,6 +54,18 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchUserId, setSearchUserId] = useState('');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Explainability state
+  const [explainData, setExplainData] = useState<any>(null);
+  const [explainLoading, setExplainLoading] = useState(false);
+  const [analyzeResult, setAnalyzeResult] = useState<any>(null);
+  const [analyzeLoading, setAnalyzeLoading] = useState(false);
+  const [showExplain, setShowExplain] = useState(false);
+
+  // ARIA state
+  const [ariaInvestigations, setAriaInvestigations] = useState<any[]>([]);
+  const [selectedInv, setSelectedInv] = useState<any>(null);
+  const [invLoading, setInvLoading] = useState(false);
 
   // Authenticate Admin
   const handleLogin = async (e: React.FormEvent) => {
@@ -125,7 +140,39 @@ export default function App() {
     axios.get(`${API_BASE}/admin/events/${selectedEventId}`)
       .then(res => setSelectedEvent(res.data))
       .catch(err => console.error("Event detail fetch failed", err));
+    // reset explainability when event changes
+    setExplainData(null); setAnalyzeResult(null); setShowExplain(false);
   }, [selectedEventId, isAuthenticated]);
+
+  // Fetch ARIA investigations when tab active
+  useEffect(() => {
+    if (!isAuthenticated || activeTab !== 'aria') return;
+    setInvLoading(true);
+    axios.get(`${API_BASE}/admin/aria/investigations`)
+      .then(res => setAriaInvestigations(res.data))
+      .catch(() => {})
+      .finally(() => setInvLoading(false));
+  }, [isAuthenticated, activeTab, refreshTrigger]);
+
+  const fetchExplain = async (eventId: number) => {
+    setExplainLoading(true); setExplainData(null);
+    try { const r = await axios.get(`${API_BASE}/admin/events/${eventId}/explain`); setExplainData(r.data); }
+    catch (e) { console.error(e); }
+    finally { setExplainLoading(false); setShowExplain(true); }
+  };
+
+  const fetchAnalyze = async (eventId: number) => {
+    setAnalyzeLoading(true); setAnalyzeResult(null);
+    try { const r = await axios.post(`${API_BASE}/admin/events/${eventId}/analyze`); setAnalyzeResult(r.data); }
+    catch (e) { console.error(e); }
+    finally { setAnalyzeLoading(false); }
+  };
+
+  const updateInvStatus = async (id: number, status: string) => {
+    await axios.patch(`${API_BASE}/admin/aria/investigations/${id}/status`, { status });
+    setAriaInvestigations(prev => prev.map(i => i.id === id ? { ...i, status } : i));
+    if (selectedInv?.id === id) setSelectedInv((p: any) => ({ ...p, status }));
+  };
 
   const levels = [
     { name: 'MONITOR', color: 'bg-emerald-500 text-emerald-400 border-emerald-500/20 bg-emerald-500/10', icon: ShieldCheck },
@@ -269,7 +316,7 @@ export default function App() {
             <Clock size={18} />
             <span>{t('tab_timeline')}</span>
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('alerts')}
             className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
               activeTab === 'alerts' ? 'bg-teal-500/10 text-teal-300' : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
@@ -277,6 +324,20 @@ export default function App() {
           >
             <Bell size={18} />
             <span>{t('tab_alerts')}</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('aria')}
+            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === 'aria' ? 'bg-purple-500/10 text-purple-300' : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
+            }`}
+          >
+            <Bot size={18} />
+            <span>{t('tab_aria')}</span>
+            {ariaInvestigations.filter(i => i.status === 'open').length > 0 && (
+              <span className="ml-auto bg-purple-500/20 text-purple-300 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                {ariaInvestigations.filter(i => i.status === 'open').length}
+              </span>
+            )}
           </button>
         </aside>
 
@@ -416,6 +477,73 @@ export default function App() {
                         </pre>
                       </div>
                     </div>
+
+                    {/* ── Explainability Panel ── */}
+                    <div className="bg-neutral-900 border border-white/[0.04] rounded-xl p-5 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <BarChart2 size={14} className="text-teal-400" />
+                          <span>Feature Explainability</span>
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => fetchExplain(selectedEvent.id)}
+                            disabled={explainLoading}
+                            className="flex items-center gap-1.5 text-[10px] font-bold uppercase bg-teal-500/10 border border-teal-500/20 text-teal-300 hover:bg-teal-500/20 px-3 py-1.5 rounded-lg transition-colors"
+                          >
+                            <Eye size={11} />
+                            {explainLoading ? 'Loading...' : 'Explain'}
+                          </button>
+                          {explainData && (
+                            <button
+                              onClick={() => fetchAnalyze(selectedEvent.id)}
+                              disabled={analyzeLoading}
+                              className="flex items-center gap-1.5 text-[10px] font-bold uppercase bg-purple-500/10 border border-purple-500/20 text-purple-300 hover:bg-purple-500/20 px-3 py-1.5 rounded-lg transition-colors"
+                            >
+                              <Bot size={11} />
+                              {analyzeLoading ? 'Asking Qwen...' : 'VLM Analysis'}
+                            </button>
+                          )}
+                          {explainData && (
+                            <button onClick={() => setShowExplain(v => !v)} className="text-neutral-500 hover:text-white">
+                              {showExplain ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {showExplain && explainData && (
+                        <div className="space-y-4">
+                          {Object.entries(explainData).map(([name, pdata]: [string, any]) => (
+                            <div key={name} className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-neutral-300 uppercase">{name}</span>
+                                <span className="text-[10px] text-neutral-500 font-mono">{pdata.summary}</span>
+                              </div>
+                              {pdata.chart_png_b64 && (
+                                <img
+                                  src={`data:image/png;base64,${pdata.chart_png_b64}`}
+                                  alt={`${name} feature importance`}
+                                  className="w-full rounded-lg border border-white/[0.04]"
+                                />
+                              )}
+                            </div>
+                          ))}
+
+                          {analyzeResult && (
+                            <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4 space-y-2">
+                              <p className="text-[10px] font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <Bot size={11}/> Qwen3.5-0.8B VLM Assessment
+                              </p>
+                              <p className="text-xs text-neutral-300 leading-relaxed">{analyzeResult.assessment}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {!explainData && !explainLoading && (
+                        <p className="text-[10px] text-neutral-600">Click Explain to generate feature importance charts for this event's ML providers.</p>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-neutral-500 space-y-4">
@@ -532,6 +660,119 @@ export default function App() {
                 {alerts.length === 0 && (
                   <div className="h-48 flex items-center justify-center border border-dashed border-white/[0.06] rounded-xl text-neutral-500 text-xs">
                     No active threat incidents reported in the alert stream.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ARIA TAB */}
+          {activeTab === 'aria' && (
+            <div className="flex-1 flex overflow-hidden">
+              {/* Investigation list */}
+              <div className="w-80 border-r border-white/[0.06] flex flex-col shrink-0">
+                <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
+                  <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Bot size={13} className="text-purple-400"/>ARIA Findings
+                  </span>
+                  <span className="text-[9px] text-neutral-500 font-mono">auto-scans every 60s</span>
+                </div>
+                <div className="flex-1 overflow-y-auto divide-y divide-white/[0.04]">
+                  {invLoading && <p className="p-4 text-xs text-neutral-500">Scanning...</p>}
+                  {!invLoading && ariaInvestigations.length === 0 && (
+                    <div className="p-6 text-center text-xs text-neutral-600">
+                      No investigations yet. ARIA needs ≥3 events above 0.3 risk from the same user in 10 minutes.
+                    </div>
+                  )}
+                  {ariaInvestigations.map(inv => (
+                    <button
+                      key={inv.id}
+                      onClick={() => setSelectedInv(inv)}
+                      className={`w-full text-left p-4 hover:bg-white/[0.02] flex flex-col gap-1.5 ${selectedInv?.id === inv.id ? 'bg-white/[0.02]' : ''}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                          inv.status === 'open' ? 'bg-purple-500/20 text-purple-300' :
+                          inv.status === 'resolved' ? 'bg-teal-500/20 text-teal-400' :
+                          'bg-neutral-700 text-neutral-400'
+                        }`}>{inv.status}</span>
+                        <span className="text-[9px] text-neutral-500 font-mono">conf {(inv.confidence * 100).toFixed(0)}%</span>
+                      </div>
+                      <p className="text-xs text-neutral-200 font-medium leading-snug">{inv.hypothesis}</p>
+                      <p className="text-[10px] text-neutral-500 font-mono">{inv.cluster_key} · {inv.event_count} events · cycle {inv.cycle}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Investigation detail */}
+              <div className="flex-1 overflow-y-auto p-8">
+                {selectedInv ? (
+                  <div className="space-y-6 max-w-3xl">
+                    <header className="flex justify-between items-start pb-4 border-b border-white/[0.06]">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Bot size={16} className="text-purple-400"/>
+                          <h2 className="text-lg font-bold">Investigation #{selectedInv.id}</h2>
+                          <span className="text-[9px] font-mono bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded uppercase">{selectedInv.classification}</span>
+                        </div>
+                        <p className="text-xs text-neutral-400">{selectedInv.hypothesis}</p>
+                        <p className="text-[10px] text-neutral-600 font-mono mt-1">User: {selectedInv.cluster_key} · {selectedInv.event_count} events · {selectedInv.cycle} scan cycles</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => updateInvStatus(selectedInv.id, 'resolved')} className="flex items-center gap-1 text-[10px] bg-teal-500/10 border border-teal-500/20 text-teal-400 hover:bg-teal-500/20 px-2.5 py-1.5 rounded-lg font-bold uppercase">
+                          <CheckCircle2 size={11}/> Resolve
+                        </button>
+                        <button onClick={() => updateInvStatus(selectedInv.id, 'fp_confirmed')} className="flex items-center gap-1 text-[10px] bg-neutral-700 border border-white/[0.06] text-neutral-400 hover:text-white px-2.5 py-1.5 rounded-lg font-bold uppercase">
+                          <XCircle size={11}/> False Positive
+                        </button>
+                      </div>
+                    </header>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-neutral-900 border border-white/[0.04] rounded-xl p-4">
+                        <p className="text-[10px] text-neutral-500 uppercase font-bold mb-1">Evidence Summary</p>
+                        <p className="text-xs text-neutral-300 leading-relaxed">{selectedInv.evidence_summary}</p>
+                      </div>
+                      <div className="bg-neutral-900 border border-white/[0.04] rounded-xl p-4">
+                        <p className="text-[10px] text-neutral-500 uppercase font-bold mb-1">Confidence</p>
+                        <div className="flex items-baseline gap-1 font-mono">
+                          <span className="text-2xl font-bold text-purple-300">{(selectedInv.confidence * 100).toFixed(0)}%</span>
+                        </div>
+                        <div className="mt-2 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-purple-500 rounded-full" style={{width: `${selectedInv.confidence * 100}%`}}/>
+                        </div>
+                      </div>
+                    </div>
+
+                    {selectedInv.vlm_assessment && (
+                      <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-5 space-y-2">
+                        <p className="text-[10px] font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <Bot size={11}/> Qwen3.5-0.8B VLM Autonomous Analysis
+                        </p>
+                        <p className="text-xs text-neutral-300 leading-relaxed whitespace-pre-wrap">{selectedInv.vlm_assessment}</p>
+                      </div>
+                    )}
+
+                    <div className="bg-neutral-900 border border-white/[0.04] rounded-xl p-4 space-y-2">
+                      <p className="text-[10px] text-neutral-500 uppercase font-bold">Cluster Event IDs</p>
+                      <div className="flex flex-wrap gap-2">
+                        {(selectedInv.cluster_event_ids || []).map((id: number) => (
+                          <button
+                            key={id}
+                            onClick={() => { setActiveTab('dashboard'); setSelectedEventId(id); }}
+                            className="text-[10px] font-mono bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-2 py-1 rounded"
+                          >
+                            #{id}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-neutral-600 space-y-3">
+                    <Bot size={40} className="opacity-30"/>
+                    <p className="text-xs font-mono">Select an investigation from the list</p>
                   </div>
                 )}
               </div>

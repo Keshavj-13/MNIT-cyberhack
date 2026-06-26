@@ -124,8 +124,9 @@ export default function App() {
     setIsEvaluating(true);
     setEvaluationResult(null);
     try {
-      // Direct Evaluation returns the full model outputs
-      const res = await axios.post(`${API_BASE}/attacker/evaluate/raw`, customPayload);
+      // send url as both keys so URL phishing model receives it
+      const payload = { ...customPayload, current_url: customPayload.url };
+      const res = await axios.post(`${API_BASE}/attacker/evaluate/raw`, payload);
       setEvaluationResult(res.data);
     } catch (err) {
       console.error(err);
@@ -315,14 +316,26 @@ export default function App() {
                   
                   <div className="space-y-3">
                     {scenarioSteps.map((step, i) => (
-                      <div key={i} className="bg-neutral-900 border border-white/[0.04] rounded-xl p-4 space-y-2">
+                      <div key={i} className="bg-neutral-900 border border-white/[0.04] rounded-xl p-4 space-y-3">
                         <div className="flex items-center justify-between">
                           <p className="text-xs font-bold text-white">{step.label}</p>
                           <span className={`text-xs font-mono font-bold ${LEVEL_TEXT[step.result.escalation_level]}`}>
-                            {step.result.decision} ({(step.result.overall_risk * 100).toFixed(0)})
+                            {step.result.decision} — {(step.result.overall_risk * 100).toFixed(0)}/100
                           </span>
                         </div>
-                        <p className="text-xs text-neutral-400">{step.result.why_decision}</p>
+                        <p className="text-xs text-neutral-400 italic">"{step.result.why_decision}"</p>
+                        {step.result.provider_breakdown && (
+                          <div className="grid grid-cols-2 gap-2">
+                            {Object.entries(step.result.provider_breakdown).map(([name, d]: [string, any]) => (
+                              <div key={name} className="bg-neutral-950 rounded-lg px-3 py-2 flex items-center justify-between">
+                                <span className="text-[9px] text-neutral-500 truncate max-w-[120px]">{name.replace('Provider','').replace('Risk','')}</span>
+                                <span className={`text-[10px] font-mono font-bold ${d.risk_score > 0.5 ? 'text-red-400' : 'text-neutral-500'}`}>
+                                  {(d.risk_score * 100).toFixed(0)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
