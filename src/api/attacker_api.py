@@ -129,6 +129,9 @@ def run_demo_scenario(name: str, db: Session = Depends(get_db), attacker = Depen
             db.add(TelemetryData(session_id=sim_session_id, type="session", data={"type": "sms_received", "sms_text": step["payload"]["sms_text"]}))
         if "url" in step["payload"]:
             db.add(TelemetryData(session_id=sim_session_id, type="session", data={"type": "link_clicked", "url": step["payload"]["url"]}))
+            # page_load event so FeatureExtractor surfaces current_url to the URL phishing model
+            db.add(TelemetryData(session_id=sim_session_id, type="session", data={"url": step["payload"]["url"]}))
+            payload["current_url"] = step["payload"]["url"]
         db.commit()
             
         result = run_evaluation(payload, db)
