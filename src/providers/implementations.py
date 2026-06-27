@@ -192,8 +192,13 @@ class NetworkRiskProvider(RiskProvider):
 
 
 class AccountTakeoverProvider(RiskProvider):
-    BEHAVIOR_FEATURES = ["dwell_mean","dwell_std","dwell_range","flight_mean","flight_std",
-                         "flight_range","lat_mean","lat_std","lat_range","rhythm"]
+    BEHAVIOR_FEATURES = [
+        "dwell_mean","dwell_std","dwell_range",
+        "flight_mean","flight_std","flight_range",
+        "lat_mean","lat_std","lat_range","rhythm",
+        # Qwen-suggested ratio features
+        "dwell_cv","flight_dispersion","lat_cv","rhythm_abs","dwell_flight_ratio",
+    ]
 
     def __init__(self, model_path="models/artifacts/behavioral_risk.joblib"):
         self.model = self.scaler = None; self.threshold = 0.41
@@ -247,9 +252,10 @@ class DeviceTrustProvider(RiskProvider):
 # PhishingRiskProvider removed — SocialEngineeringRiskProvider is now the URL phishing model
 
 
-_META_KEYS = ["mean_dwell_time", "mean_flight_time", "typing_cadence", "backspace_frequency",
-              "avg_mouse_velocity", "avg_mouse_acceleration", "mouse_path_straightness",
-              "mouse_click_density", "navigation_speed", "interaction_density"]
+# 10 meta keys fed to VarCNN metadata branch (fixed size — model expects exactly 10)
+_META_KEYS = ["avg_mouse_velocity", "avg_mouse_acceleration", "mouse_path_straightness",
+              "mouse_click_density", "mouse_jerk_mean", "mouse_jerk_std",
+              "mouse_direction_entropy", "mouse_imi_mean", "mouse_speed_std", "mouse_speed_p90"]
 
 class BeaconBehavioralProvider(RiskProvider):
     # 0.99 matches the training threshold used by the BEACON model creator

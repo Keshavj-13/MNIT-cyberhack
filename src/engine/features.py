@@ -61,7 +61,7 @@ class FeatureExtractor:
             "mean_flight_time": fm,
             "typing_cadence": fs,
             "backspace_frequency": float(bk / len(keystrokes)) if keystrokes else 0.0,
-            # expanded features for ATO 10-feature model
+            # ATO model features (10 base + 5 ratio — matches behavioral_risk.joblib training)
             "dwell_mean": float(np.mean(dwell)) if dwell else 0.0,
             "dwell_std":  float(np.std(dwell))  if dwell else 0.0,
             "dwell_range": float(np.max(dwell) - np.min(dwell)) if dwell else 0.0,
@@ -71,6 +71,12 @@ class FeatureExtractor:
             "lat_std":   float(np.std(lat))   if lat else 0.0,
             "lat_range": float(np.max(lat) - np.min(lat)) if lat else 0.0,
             "rhythm": fs / (fm + 1e-9),
+            # Qwen-suggested ratio features — capture normalised variance patterns
+            "dwell_cv":           float(np.std(dwell) / (np.mean(dwell) + 1e-9)) if dwell else 0.0,
+            "flight_dispersion":  float(fs * (np.max(flight)-np.min(flight))) if flight else 0.0,
+            "lat_cv":             float((np.max(lat)-np.min(lat)) / (np.mean(lat)+1e-9)) if lat else 0.0,
+            "rhythm_abs":         abs(fs / (fm + 1e-9)) * 10,
+            "dwell_flight_ratio": float(np.std(dwell) / ((np.max(flight)-np.min(flight))+1e-9)) if dwell and flight else 0.0,
         }
 
     def _extract_mouse_features(self, mouse_events: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -114,11 +120,40 @@ class FeatureExtractor:
             if duration_min > 0:
                 click_density = len(click_events) / duration_min
 
+        # jerk = rate of change of acceleration (BEACON pipeline feature)
+        jerks = []
+        for i in range(1, len(accelerations)):
+            dt = (move_events[i].get('timestamp',0) - move_events[i-1].get('timestamp',0)) or 1
+            jerks.append(abs(accelerations[i] - accelerations[i-1]) / dt)
+
+        # angle direction entropy (BEACON: direction_entropy)
+        direction_entropy = 0.0
+        if len(move_events) > 2:
+            dx = [move_events[i]['data'].get('x',0) - move_events[i-1]['data'].get('x',0) for i in range(1,len(move_events))]
+            dy = [move_events[i]['data'].get('y',0) - move_events[i-1]['data'].get('y',0) for i in range(1,len(move_events))]
+            angles_deg = np.degrees(np.arctan2(dy, dx)) % 360
+            bins = np.histogram(angles_deg, bins=8, range=(0,360))[0].astype(float)
+            p = bins / (bins.sum() + 1e-9)
+            direction_entropy = float(-np.sum(p * np.log(p + 1e-9)))
+
+        # inter-movement intervals (BEACON: imi_mean/std — time gaps between moves)
+        move_ts = [m.get('timestamp', 0) for m in move_events]
+        imis = [move_ts[i+1]-move_ts[i] for i in range(len(move_ts)-1) if move_ts[i+1]-move_ts[i] > 0]
+
         return {
             "avg_mouse_velocity": float(np.mean(velocities)) if velocities else 0.0,
             "avg_mouse_acceleration": float(np.mean(accelerations)) if accelerations else 0.0,
             "mouse_path_straightness": float(straightness),
-            "mouse_click_density": float(click_density)
+            "mouse_click_density": float(click_density),
+            # BEACON-aligned features
+            "mouse_jerk_mean":  float(np.mean(jerks))  if jerks else 0.0,
+            "mouse_jerk_std":   float(np.std(jerks))   if jerks else 0.0,
+            "mouse_jerk_max":   float(np.max(jerks))   if jerks else 0.0,
+            "mouse_direction_entropy": direction_entropy,
+            "mouse_imi_mean":  float(np.mean(imis)) if imis else 0.0,
+            "mouse_imi_std":   float(np.std(imis))  if imis else 0.0,
+            "mouse_speed_std": float(np.std(velocities)) if velocities else 0.0,
+            "mouse_speed_p90": float(np.percentile(velocities, 90)) if velocities else 0.0,
         }
 
     def _extract_session_features(self, session_events: List[Dict[str, Any]], all_events: List[Dict[str, Any]]) -> Dict[str, Any]:
