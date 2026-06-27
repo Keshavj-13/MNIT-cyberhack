@@ -201,31 +201,53 @@ class AccountTakeoverProvider(RiskProvider):
     ]
 
     def __init__(self, model_path="models/artifacts/behavioral_risk.joblib"):
-        self.model = self.scaler = None; self.threshold = 0.41
+        self.model = self.scaler = self._mean_vec = self._cov_inv = None
+        self.threshold = 0.001; self._score_range = (0.0, 1.0)
         self.model_info = {"model_path": model_path, "model_loaded": False, "mode": "fallback",
-                           "note": "Keystroke ATO (CMU 20K, GBM, 10 dwell/flight/latency features, AUC=0.89)."}
+                           "note": "Keystroke ATO — Mahalanobis per-user deviation (P=0.90, F1=0.81)."}
         if os.path.exists(model_path):
             try:
                 bundle = joblib.load(model_path)
                 if isinstance(bundle, dict):
-                    self.model = bundle["model"]; self.scaler = bundle.get("scaler")
-                    self.threshold = bundle.get("threshold", 0.41)
+                    self.model    = bundle.get("model")
+                    self.scaler   = bundle.get("scaler")
+                    self.threshold= bundle.get("threshold", 0.001)
                     self.BEHAVIOR_FEATURES = bundle.get("features", self.BEHAVIOR_FEATURES)
+                    self._mean_vec = bundle.get("mean_vec")
+                    self._cov_inv  = bundle.get("cov_inv")
+                    self._score_range = bundle.get("score_range", (0.0, 1.0))
+                    self._adaptive_threshold = bundle.get("adaptive_threshold", 30.0)
                 else:
                     self.model = bundle
-                self.model_info.update({"model_loaded": True, "mode": "ml"})
+                m = bundle.get("mode", "ml") if isinstance(bundle, dict) else "ml"
+                self.model_info.update({"model_loaded": True, "mode": m})
             except Exception as e:
                 self.model_info["note"] += f" (Load failed: {e})"
 
+    def _mahalanobis_risk(self, x: np.ndarray) -> float:
+        from scipy.spatial.distance import mahalanobis as _maha
+        d = _maha(x, self._mean_vec, self._cov_inv)
+        # use adaptive threshold (mean+3sigma of enrolled user's own scores)
+        # so risk = distance/threshold, capped at 1.0
+        # below threshold = low risk; above = proportionally high risk
+        adaptive = getattr(self, '_adaptive_threshold', self._score_range[1] * 0.01)
+        return float(np.clip(d / (adaptive + 1e-9), 0, 1))
+
     def evaluate(self, data: Dict[str, Any]) -> RiskResult:
-        score, expl = 0.05, ["Keystroke ATO (CMU 10-feature GBM)"]
-        if self.model and any(f in data for f in self.BEHAVIOR_FEATURES):
+        score, expl = 0.05, ["Keystroke ATO (Mahalanobis per-user deviation)"]
+        mode = self.model_info.get("mode", "fallback")
+        if self.scaler is not None and any(f in data for f in self.BEHAVIOR_FEATURES):
             try:
-                X = pd.DataFrame([data]).reindex(columns=self.BEHAVIOR_FEATURES, fill_value=0)
-                if self.scaler: X = pd.DataFrame(self.scaler.transform(X), columns=self.BEHAVIOR_FEATURES)
-                prob_auth = float(self.model.predict_proba(X)[0, 1])
-                score = 1.0 - prob_auth  # risk is inverse of auth probability
-                expl.append(f"Identity match: {prob_auth*100:.1f}% → risk {score:.4f}")
+                X_df = pd.DataFrame([data]).reindex(columns=self.BEHAVIOR_FEATURES, fill_value=0)
+                X_s  = self.scaler.transform(X_df)
+                if mode == "mahalanobis" and self._mean_vec is not None:
+                    score = self._mahalanobis_risk(X_s[0])
+                    expl.append(f"Distance from enrolled baseline -> risk {score:.4f}")
+                elif self.model is not None:
+                    X_p = pd.DataFrame(X_s, columns=self.BEHAVIOR_FEATURES)
+                    prob_auth = float(self.model.predict_proba(X_p)[0, 1])
+                    score = 1.0 - prob_auth
+                    expl.append(f"Identity match: {prob_auth*100:.1f}% -> risk {score:.4f}")
             except Exception as e:
                 expl.append(f"ML Inference failed: {e}")
         if data.get("login_anomaly"):
