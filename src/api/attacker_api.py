@@ -72,8 +72,7 @@ def attacker_me(attacker = Depends(get_current_attacker)):
 
 # --- Scripted Scenario definitions ---
 
-SMISHING_SMS = "URGENT: Verify your identity at secure-bank.com immediately or your account will be suspended."
-PHISHING_URL = "secure-bank.com"
+PHISHING_URL = "http://secure-bank.phish.ru/verify-identity"
 
 DEMO_SCENARIOS: Dict[str, List[Dict[str, Any]]] = {
     "normal_customer": [
@@ -83,15 +82,13 @@ DEMO_SCENARIOS: Dict[str, List[Dict[str, Any]]] = {
     ],
     "elderly_victim": [
         {"label": "Customer logs in normally.", "payload": {}},
-        {"label": f"SMS arrives: \"{SMISHING_SMS}\"", "payload": {"sms_text": SMISHING_SMS}},
-        {"label": "Customer taps the link and 'verifies' on the cloned page.", "payload": {"url": PHISHING_URL}},
-        {"label": "Customer authorizes a 'verification transfer' of $250 to a new payee.", "payload": {"amount": 250, "is_new_beneficiary": True}},
+        {"label": "Customer clicks a suspicious link received via message.", "payload": {"url": PHISHING_URL}},
+        {"label": "Customer authorizes a 'verification transfer' of $250 to a new payee.", "payload": {"amount": 250, "is_new_beneficiary": True, "url": PHISHING_URL}},
     ],
     "smishing_victim": [
         {"label": "Customer logs in normally.", "payload": {}},
-        {"label": f"SMS arrives: \"{SMISHING_SMS}\"", "payload": {"sms_text": SMISHING_SMS}},
-        {"label": "Customer clicks the link and submits credentials on the cloned site.", "payload": {"url": PHISHING_URL}},
-        {"label": "Harvested credentials are used to log in from a new device.", "payload": {"login_anomaly": True, "new_device": True}},
+        {"label": "Customer clicks a phishing link in a spoofed bank alert.", "payload": {"url": PHISHING_URL}},
+        {"label": "Stolen credentials are used to log in from a new device.", "payload": {"login_anomaly": True, "new_device": True, "url": PHISHING_URL}},
     ],
     "account_takeover": [
         {"label": "Login from an impossible-travel location with repeated failures.", "payload": {"login_anomaly": True, "failed_attempts": 5}},
@@ -100,10 +97,9 @@ DEMO_SCENARIOS: Dict[str, List[Dict[str, Any]]] = {
     ],
     "full_fraud_chain": [
         {"label": "Customer logs in normally.", "payload": {}},
-        {"label": f"Smishing SMS arrives: \"{SMISHING_SMS}\"", "payload": {"sms_text": SMISHING_SMS}},
-        {"label": "Customer clicks the link and submits credentials on the cloned site.", "payload": {"url": PHISHING_URL}},
-        {"label": "Attacker logs in from a new, rooted, VPN-masked device using stolen credentials.", "payload": {"login_anomaly": True, "new_device": True, "rooted": True, "vpn_detected": True}},
-        {"label": "Attacker drains funds to a new external account.", "payload": {"amount": 25000, "is_new_beneficiary": True, "login_anomaly": True, "rooted": True}},
+        {"label": "Customer clicks a phishing link in a spoofed bank alert.", "payload": {"url": PHISHING_URL}},
+        {"label": "Attacker logs in from a new, rooted, VPN-masked device using stolen credentials.", "payload": {"login_anomaly": True, "new_device": True, "rooted": True, "vpn_detected": True, "url": PHISHING_URL}},
+        {"label": "Attacker drains funds to a new external account.", "payload": {"amount": 25000, "is_new_beneficiary": True, "login_anomaly": True, "rooted": True, "url": PHISHING_URL}},
     ],
 }
 
@@ -111,8 +107,69 @@ DEMO_SCENARIOS: Dict[str, List[Dict[str, Any]]] = {
 def list_demo_scenarios(attacker = Depends(get_current_attacker)):
     return {name: [step["label"] for step in steps] for name, steps in DEMO_SCENARIOS.items()}
 
+def generate_simulated_telemetry(step_idx: int, is_anomaly: bool, session_id: str, aes_key: str):
+    import random
+    import json
+    import time
+    from src.api.internal.session_crypto import encrypt_aes_gcm
+    
+    events = []
+    # Generate 100 events to ensure we pass the 64-event cold-start check
+    # Start timestamp in the past and increment
+    base_time = int(time.time() * 1000) - 200000 + (step_idx * 50000)
+    
+    for i in range(100):
+        if is_anomaly:
+            # Highly skewed bimodal distribution (burst auto-clicks + heavy lagging delays)
+            dt = int(random.uniform(1500, 3000)) if i % 5 == 0 else int(random.uniform(10, 40))
+        else:
+            # Consistent normal typing
+            dt = int(random.gauss(150, 20))
+        dt = max(10, dt)
+        base_time += dt
+        
+        if i % 2 == 0:
+            key_code = f"Key{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}"
+            dwell = int(random.uniform(50, 120)) if not is_anomaly else int(random.uniform(200, 500))
+            flight = dt - dwell
+            events.append({
+                "type": "keystroke",
+                "timestamp": base_time,
+                "data": {"event": "dwell", "dwellTime": dwell, "key": key_code[-1], "code": key_code}
+            })
+            events.append({
+                "type": "keystroke",
+                "timestamp": base_time + dwell,
+                "data": {"event": "flight", "flightTime": flight, "key": key_code[-1], "code": key_code}
+            })
+        else:
+            x = int(random.uniform(100, 800))
+            y = int(random.uniform(100, 600))
+            vel = random.uniform(0.5, 2.5) if not is_anomaly else random.uniform(5.0, 15.0)
+            events.append({
+                "type": "mouse",
+                "timestamp": base_time,
+                "data": {"event": "move", "x": x, "y": y, "velocity": vel}
+            })
+            
+    # Encrypt package using production AES-CTR (labeled AES-GCM)
+    plaintext = json.dumps({"events": events})
+    encrypted = encrypt_aes_gcm(plaintext, aes_key)
+    
+    return {
+        "session_id": session_id,
+        "ciphertext": encrypted["ciphertext"],
+        "nonce": encrypted["nonce"],
+        "tag": encrypted["tag"]
+    }
+
 @app.post("/attacker/scenarios/{name}/run")
 def run_demo_scenario(name: str, db: Session = Depends(get_db), attacker = Depends(get_current_attacker)):
+    import time
+    from src.db.models import CustomerSession
+    from src.api.internal.session_crypto import generate_aes_key
+    from src.api.customer_api import telemetry as customer_telemetry, shuffle_session_key
+    
     if name not in DEMO_SCENARIOS:
         raise HTTPException(status_code=404, detail=f"Unknown scenario: {name}")
 
@@ -121,20 +178,60 @@ def run_demo_scenario(name: str, db: Session = Depends(get_db), attacker = Depen
     sim_user_id = f"sim_{name}_{run_id}"
     sim_session_id = f"sim_{name}_{run_id}"
 
+    # 1. Initialize dynamic cryptographic session in DB
+    aes_key = generate_aes_key()
+    cust_session = CustomerSession(
+        session_id=sim_session_id,
+        user_id=sim_user_id,
+        aes_key=aes_key,
+        risk_level=1,
+        key_version=1,
+        is_active=True
+    )
+    db.add(cust_session)
+    db.commit()
+
     steps = []
-    for step in DEMO_SCENARIOS[name]:
+    for step_idx, step in enumerate(DEMO_SCENARIOS[name]):
         payload = {**step["payload"], "user_id": sim_user_id, "session_id": sim_session_id}
-        # Injects direct telemetry if simulating lure hooks
+        
+        # 2. Determine anomaly status based on scenario timeline
+        is_anomaly = False
+        if name == "elderly_victim" and step_idx == 2:
+            is_anomaly = True
+        elif name == "smishing_victim" and step_idx >= 2:
+            is_anomaly = True
+        elif name == "account_takeover":
+            is_anomaly = True
+        elif name == "full_fraud_chain" and step_idx >= 2:
+            is_anomaly = True
+
+        # 3. Generate and POST encrypted telemetry package to production ingest pipeline
+        telemetry_payload = generate_simulated_telemetry(step_idx, is_anomaly, sim_session_id, cust_session.aes_key)
+        customer_telemetry(telemetry_payload, db)
+
+        # 4. Inject scenario hooks (phishing, SMS flags)
         if "sms_text" in step["payload"]:
             db.add(TelemetryData(session_id=sim_session_id, type="session", data={"type": "sms_received", "sms_text": step["payload"]["sms_text"]}))
         if "url" in step["payload"]:
             db.add(TelemetryData(session_id=sim_session_id, type="session", data={"type": "link_clicked", "url": step["payload"]["url"]}))
-            # page_load event so FeatureExtractor surfaces current_url to the URL phishing model
             db.add(TelemetryData(session_id=sim_session_id, type="session", data={"url": step["payload"]["url"]}))
             payload["current_url"] = step["payload"]["url"]
         db.commit()
             
+        # 5. Run evaluation (exact production path)
+        start_time = time.perf_counter()
         result = run_evaluation(payload, db)
+        latency = (time.perf_counter() - start_time) * 1000  # ms
+        
+        # 6. Apply dynamic key rotation if risk escalated
+        key_rotated = False
+        new_key = None
+        new_version = cust_session.key_version
+        if result.escalation_level > cust_session.risk_level:
+            new_key, new_version = shuffle_session_key(cust_session, result.escalation_level, db)
+            key_rotated = True
+
         steps.append({
             "label": step["label"],
             "payload": step["payload"],
@@ -144,7 +241,10 @@ def run_demo_scenario(name: str, db: Session = Depends(get_db), attacker = Depen
                 "escalation_level": result.escalation_level,
                 "recommendation": result.recommendation,
                 "why_decision": result.why_decision,
-                "provider_breakdown": {k: v.dict() for k, v in result.provider_breakdown.items()}
+                "provider_breakdown": {k: v.dict() for k, v in result.provider_breakdown.items()},
+                "latency_ms": latency,
+                "key_rotated": key_rotated,
+                "key_version": new_version
             }
         })
 

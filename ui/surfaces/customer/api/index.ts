@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { encryptData, decryptData } from './crypto';
 
-const API_BASE = 'http://localhost:8001';
+const API_BASE = `${window.location.protocol}//${window.location.hostname}:8001`;
 
 // Enable cookie credentials
 axios.defaults.withCredentials = true;

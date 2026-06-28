@@ -7,7 +7,8 @@ from typing import Dict, Any, List
 from src.engine.registry import ProviderRegistry
 from src.providers.implementations import (
     TransactionRiskProvider, SocialEngineeringRiskProvider,
-    AccountTakeoverProvider, DeviceTrustProvider, NetworkRiskProvider
+    AccountTakeoverProvider, DeviceTrustProvider, NetworkRiskProvider,
+    BeaconBehavioralProvider
 )
 
 app = FastAPI(title="MNIT Research Showcase Portal API", version="1.0.0")
@@ -30,6 +31,7 @@ def bootstrap_showcase():
     registry.register_provider(AccountTakeoverProvider())
     registry.register_provider(NetworkRiskProvider())
     registry.register_provider(DeviceTrustProvider())
+    registry.register_provider(BeaconBehavioralProvider())
 
 bootstrap_showcase()
 
@@ -82,7 +84,7 @@ MODEL_REGISTRY_META = {
     "BeaconBehavioralProvider": {
         "display_name": "BEACON VarCNN Behavioral Fingerprint",
         "risk_category": "Behavioral Risk",
-        "training_summary_key": None,
+        "training_summary_key": "beacon_behavioral",
         "explainability_file": None,
         "dataset": "beacon",
         "input_description": "1024-point min-max normalised inter-event timing sequence + 10 scalar metadata features. Dual-stream architecture: ResNet backbone (4 stages, 64→512 channels) + metadata MLP, outputs 512-d GAP embedding.",

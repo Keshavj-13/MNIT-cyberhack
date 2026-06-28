@@ -1,0 +1,23 @@
+{
+    "dataset_story": "BEACON is a multimodal dataset of raw human gameplay telemetry streams designed to capture high-resolution behavioral fingerprints and inter-event timing (IET) rhythms. It provides the timing patterns needed to train deep sequential models.",
+    "aura_purpose": "Evaluates mid-session user behavioral shifts and detects account takeover or automated replay/agent attacks using high-frequency client-side timings.",
+    "risk_mapping": {
+        "Behavioral Risk": "Primary",
+        "Device Risk": "Not Used",
+        "Environment Risk": "Not Used",
+        "Transaction Risk": "Not Used",
+        "Failure Risk": "Not Used",
+        "Intent Risk": "Not Used"
+    },
+    "overview": {
+        "name": "BEACON",
+        "domain": "Behavioral Biometrics",
+        "source": "https://huggingface.co/datasets/beacon-gui/BEACON-Dataset",
+        "license": "CC BY 4.0",
+        "data_type": "Human Telemetry",
+        "title": "BEACON: A Multimodal Dataset for Learning Behavioral Fingerprints"
+    },
+    "citation": {
+        "text": "Singh, I., et al. (2026). BEACON: A Multimodal Dataset for Learning Behavioral Fingerprints from Gameplay Data. arXiv:2605.10867."
+    }
+}

@@ -27,7 +27,7 @@ const T: Record<string, any> = {
 };
 
 
-const API_BASE = 'http://localhost:8004';
+const API_BASE = `${window.location.protocol}//${window.location.hostname}:8004`;
 
 export default function App() {
   const pref = usePreferences();

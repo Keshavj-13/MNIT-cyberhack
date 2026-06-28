@@ -181,6 +181,7 @@ async def run():
     while True:
         await asyncio.sleep(CYCLE_SECS)
         try:
-            _scan_and_investigate()
+            # ponytail: run blocking DB scans and heavy VLM inference in a separate thread so Admin API doesn't freeze
+            await asyncio.to_thread(_scan_and_investigate)
         except Exception as e:
             print(f"[ARIA] loop error: {e}")

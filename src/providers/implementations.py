@@ -236,7 +236,10 @@ class AccountTakeoverProvider(RiskProvider):
     def evaluate(self, data: Dict[str, Any]) -> RiskResult:
         score, expl = 0.05, ["Keystroke ATO (Mahalanobis per-user deviation)"]
         mode = self.model_info.get("mode", "fallback")
-        if self.scaler is not None and any(f in data for f in self.BEHAVIOR_FEATURES):
+        # require at least 3 non-zero ATO features — zero-filled default from FeatureExtractor
+        # has no real keystroke data and scores incorrectly high against enrolled baseline
+        nonzero = sum(1 for f in self.BEHAVIOR_FEATURES if data.get(f, 0) != 0)
+        if self.scaler is not None and nonzero >= 3:
             try:
                 X_df = pd.DataFrame([data]).reindex(columns=self.BEHAVIOR_FEATURES, fill_value=0)
                 X_s  = self.scaler.transform(X_df)
@@ -286,12 +289,13 @@ class BeaconBehavioralProvider(RiskProvider):
     # Cosine similarity threshold for within-session embedding drift
     # ponytail: class predictions collapse to user-02 on banking data (distribution shift);
     # embeddings from the GAP layer retain more discriminative signal than softmax outputs
-    DRIFT_THRESHOLD = 0.92
+    DRIFT_THRESHOLD = 0.98
 
     # require this many consistent events before baseline is trusted
     _WARMUP = 3
 
     def __init__(self, model_path="models/beacon/best_model_varcnn_60WS_90OL_seq1024_thr0.99.pth"):
+        self.features = ["inter_event_timings (1024-point sequence)"] + _META_KEYS
         self.net = None
         self._embed_cache: Dict[str, np.ndarray] = {}
         # warmup buffers: collect first N embeddings before locking baseline

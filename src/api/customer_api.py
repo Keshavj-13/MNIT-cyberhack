@@ -300,10 +300,13 @@ def send_otp(payload: Dict[str, str] = Body(...), db: Session = Depends(get_db))
     else:
         masked = identifier[:3] + "****" + identifier[-4:] if len(identifier) > 7 else identifier
     
-    return {
+    res = {
         "status": "success",
         "message": f"Verification code sent to {masked}"
     }
+    if os.environ.get("ALLOW_DEFAULT_SECRETS") == "1":
+        res["dev_otp"] = otp_code
+    return res
 
 @app.post("/customer/auth/verify-otp")
 def verify_otp_endpoint(payload: Dict[str, str] = Body(...), db: Session = Depends(get_db)):
@@ -473,7 +476,8 @@ def me(user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
         "user_id": user.get("sub"),
         "session_id": session_id,
         "risk_level": cust_session.risk_level,
-        "key_version": cust_session.key_version
+        "key_version": cust_session.key_version,
+        "aes_key": cust_session.aes_key
     }
 
 # Mock Database for Banking Details
@@ -581,7 +585,7 @@ def transfer(payload: EncryptedPayload = Body(...), user = Depends(get_current_u
         raise HTTPException(status_code=400, detail="Amount must be between 0 and 1,000,000.")
     beneficiary_id = decrypted_body.get("beneficiary_id")
     uid = user.get("sub", "")
-    if beneficiary_id is not None and not any(b["id"] == beneficiary_id for b in _get_beneficiaries(uid)):
+    if beneficiary_id is not None and not any(str(b["id"]) == str(beneficiary_id) for b in _get_beneficiaries(uid)):
         raise HTTPException(status_code=400, detail="Beneficiary not found.")
     is_new = decrypted_body.get("is_new_beneficiary", False)
     
@@ -653,7 +657,19 @@ def telemetry(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)
         events = payload.get("events", [])
 
     for event in events:
-        db.add(TelemetryData(session_id=session_id, type=event.get("type"), data=event.get("data")))
+        client_ts = event.get("timestamp")
+        dt_ts = None
+        if client_ts:
+            try:
+                dt_ts = datetime.datetime.fromtimestamp(client_ts / 1000.0, datetime.timezone.utc).replace(tzinfo=None)
+            except Exception:
+                pass
+        db.add(TelemetryData(
+            session_id=session_id,
+            type=event.get("type"),
+            timestamp=dt_ts,
+            data=event.get("data")
+        ))
     db.commit()
     return {"status": "success", "count": len(events)}
 

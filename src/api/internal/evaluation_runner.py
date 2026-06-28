@@ -39,7 +39,15 @@ def run_evaluation(payload: Dict[str, Any], db: Session) -> EngineResult:
         TelemetryData.session_id == session_id
     ).all()
     
-    events_list = [{"type": e.type, "data": e.data, "timestamp": e.id} for e in telemetry_events]
+    events_list = []
+    for e in telemetry_events:
+        ts_val = e.id
+        if e.timestamp:
+            try:
+                ts_val = int(e.timestamp.replace(tzinfo=datetime.timezone.utc).timestamp() * 1000)
+            except Exception:
+                pass
+        events_list.append({"type": e.type, "data": e.data, "timestamp": ts_val})
     
     extractor = FeatureExtractor()
     extracted_features = extractor.extract_features(events_list)
@@ -79,6 +87,17 @@ def run_evaluation(payload: Dict[str, Any], db: Session) -> EngineResult:
             dominant_cat = res.event_category
 
     # 5. Persist
+    from src.db.models import CustomerSession
+    sess = db.query(CustomerSession).filter(CustomerSession.session_id == session_id).first()
+    prev_level = sess.risk_level if sess else 1
+    prev_version = sess.key_version if sess else 1
+    
+    why_desc = result.why_decision
+    if result.escalation_level > prev_level:
+        why_desc = f"[CRYPTO ALERT] Session keys rotated (v{prev_version} -> v{prev_version + 1}), Cryptographic Tier escalated to Level {result.escalation_level} due to: {why_desc}"
+    elif result.escalation_level < prev_level:
+        why_desc = f"[CRYPTO INFO] Cryptographic Tier reduced to Level {result.escalation_level} (Authority restored) due to: {why_desc}"
+
     db_event = SecurityEvent(
         user_id=user_id,
         session_id=session_id,
@@ -90,7 +109,7 @@ def run_evaluation(payload: Dict[str, Any], db: Session) -> EngineResult:
         confidence=result.confidence,
         breakdown={k: v.dict() for k, v in result.provider_breakdown.items()},
         recommendation=result.recommendation,
-        why_decision=result.why_decision
+        why_decision=why_desc
     )
     db.add(db_event)
     db.commit()

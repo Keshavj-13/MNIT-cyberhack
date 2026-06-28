@@ -50,16 +50,54 @@ class RiskEngine:
         else:
             self.weights = raw
 
+    def _load_settings(self) -> Dict[str, Any]:
+        path = "config/risk_settings.json"
+        defaults = {
+            "threshold_challenge": 0.2,
+            "threshold_restrict": 0.4,
+            "threshold_contain": 0.7,
+            "max_transfer_limit": 5000,
+            "trust_recovery_speed": 1.0,
+            "weights": {
+                "TransactionRiskProvider": 0.4,
+                "SocialEngineeringRiskProvider": 0.2,
+                "PhishingRiskProvider": 0.15,
+                "AccountTakeoverProvider": 0.15,
+                "DeviceTrustProvider": 0.1,
+                "BeaconBehavioralProvider": 0.05
+            }
+        }
+        if os.path.exists(path):
+            try:
+                import json
+                with open(path, "r") as f:
+                    data = json.load(f)
+                    for k, v in defaults.items():
+                        if k not in data:
+                            data[k] = v
+                    return data
+            except Exception:
+                pass
+        return defaults
+
     def evaluate_all(self, input_data: Dict[str, Any], history: List[SessionEvent] = []) -> EngineResult:
+        settings = self._load_settings()
+        weights_map = settings.get("weights", {})
+        
         results = {}
         weighted_score = 0.0
-        total_weight = 0.0
         weighted_conf = 0.0
         
         # 1. Contextual Weight Adjustment
-        # Boost Transaction weight if it's a high-value or new-beneficiary action
-        current_weights = self.weights.copy()
-        if input_data.get("amount", 0) > 5000 or input_data.get("is_new_beneficiary"):
+        current_weights = {p.__class__.__name__: weights_map.get(p.__class__.__name__, 0.05) for p in self.providers}
+        
+        # Re-normalize adjusted weights
+        w_sum = sum(current_weights.values())
+        if w_sum > 0:
+            current_weights = {k: v / w_sum for k, v in current_weights.items()}
+            
+        limit = settings.get("max_transfer_limit", 5000)
+        if input_data.get("amount", 0) > limit or input_data.get("is_new_beneficiary"):
             if "TransactionRiskProvider" in current_weights:
                 current_weights["TransactionRiskProvider"] *= 1.5
         
@@ -85,7 +123,6 @@ class RiskEngine:
         primary_driver, primary_impact = contributions[0] if contributions else ("None", 0.0)
         
         # 4. Confidence Adjustment
-        # If the primary driver has low confidence, penalize overall confidence
         primary_res = results.get(primary_driver)
         final_conf = weighted_conf
         if primary_res and primary_res.confidence < 0.5 and primary_res.risk_score > 0.5:
@@ -99,7 +136,7 @@ class RiskEngine:
         if correlation_expl:
             summary_expl = f"{correlation_expl} {summary_expl}"
             
-        return self._make_decision(final_score, final_conf, results, summary_expl)
+        return self._make_decision(final_score, final_conf, results, summary_expl, settings)
 
     def _apply_correlation(self, base_score: float, current_results: Dict[str, RiskResult], history: List[SessionEvent]) -> tuple:
         score = base_score
@@ -140,19 +177,22 @@ class RiskEngine:
         expl = " ".join(narrative)
         return score, expl
 
-    def _make_decision(self, score: float, conf: float, breakdown: Dict[str, RiskResult], correlation_expl: str) -> EngineResult:
-        # ... (decision logic) ...
-        if score < 0.2:
+    def _make_decision(self, score: float, conf: float, breakdown: Dict[str, RiskResult], correlation_expl: str, settings: dict) -> EngineResult:
+        t_challenge = settings.get("threshold_challenge", 0.2)
+        t_restrict = settings.get("threshold_restrict", 0.4)
+        t_contain = settings.get("threshold_contain", 0.7)
+        
+        if score < t_challenge:
             level = 1
             decision = "ALLOW"
             rec = "Continue monitoring."
             why = "Low overall risk score."
-        elif score < 0.4:
+        elif score < t_restrict:
             level = 2
             decision = "CHALLENGE"
             rec = "Request Step-up Authentication (OTP/MFA)."
             why = "Moderate risk detected. Verification required."
-        elif score < 0.7:
+        elif score < t_contain:
             level = 3
             decision = "RESTRICT"
             rec = "Block high-value transfers, freeze sensitive actions."

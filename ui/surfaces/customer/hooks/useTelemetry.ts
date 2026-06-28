@@ -11,12 +11,17 @@ export const useTelemetry = (
   activeTab: string,
   sessionId: string,
   keyVersion: number,
-  aesKey: string
+  aesKey: string,
+  onStatsUpdate?: (stats: any) => void
 ) => {
   const buffer = useRef<TelemetryEvent[]>([]);
   const lastKeyTimestamp = useRef<number | null>(null);
   const keysDown = useRef<Map<string, number>>(new Map());
   const lastMouseMove = useRef<{ x: number; y: number; t: number } | null>(null);
+
+  const keystrokeTimes = useRef<number[]>([]);
+  const backspaceCount = useRef(0);
+  const totalKeys = useRef(0);
 
   // Latest crypto state reference to avoid stale closures in listeners
   const cryptoRef = useRef({ sessionId, keyVersion, aesKey });
@@ -47,10 +52,27 @@ export const useTelemetry = (
       if (keysDown.current.has(e.code)) return; 
       const now = Date.now();
       keysDown.current.set(e.code, now);
+      totalKeys.current++;
+      if (e.key === 'Backspace') backspaceCount.current++;
 
+      let flightTime = 0;
       if (lastKeyTimestamp.current) {
-        const flightTime = now - lastKeyTimestamp.current;
+        flightTime = now - lastKeyTimestamp.current;
         pushEvent('keystroke', { event: 'flight', flightTime, key: e.key, code: e.code });
+      }
+
+      if (onStatsUpdate) {
+        keystrokeTimes.current.push(now);
+        if (keystrokeTimes.current.length > 20) keystrokeTimes.current.shift();
+        const duration = (now - keystrokeTimes.current[0]) / 60000;
+        const wpm = duration > 0 ? Math.round((keystrokeTimes.current.length / 5) / duration) : 0;
+        onStatsUpdate({
+          type: 'keystroke',
+          lastKey: e.key,
+          lastFlight: flightTime,
+          wpm,
+          errorRate: totalKeys.current > 0 ? Math.round((backspaceCount.current / totalKeys.current) * 100) : 0
+        });
       }
     };
 
@@ -62,6 +84,13 @@ export const useTelemetry = (
         const dwellTime = now - dwellStart;
         pushEvent('keystroke', { event: 'dwell', dwellTime, key: e.key, code: e.code });
         keysDown.current.delete(e.code);
+
+        if (onStatsUpdate) {
+          onStatsUpdate({
+            type: 'keystroke',
+            lastDwell: dwellTime
+          });
+        }
       }
     };
 
@@ -79,6 +108,16 @@ export const useTelemetry = (
           const velocity = Math.sqrt(dx * dx + dy * dy) / dt;
           pushEvent('mouse', { event: 'move', x, y, velocity });
           lastMouseMove.current = { x, y, t: now };
+
+          if (onStatsUpdate) {
+            onStatsUpdate({
+              type: 'mouse',
+              x,
+              y,
+              velocity: parseFloat(velocity.toFixed(3)),
+              acceleration: parseFloat((velocity / dt).toFixed(5))
+            });
+          }
         }
       } else {
         lastMouseMove.current = { x, y, t: now };
@@ -87,6 +126,13 @@ export const useTelemetry = (
 
     const handleClick = (e: MouseEvent) => {
       pushEvent('mouse', { event: 'click', x: e.clientX, y: e.clientY });
+      if (onStatsUpdate) {
+        onStatsUpdate({
+          type: 'mouse_click',
+          x: e.clientX,
+          y: e.clientY
+        });
+      }
     };
 
     // Session/Idle handlers
