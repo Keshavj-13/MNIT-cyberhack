@@ -405,10 +405,15 @@ def login(payload: Dict[str, str] = Body(...), response: Response = Response(), 
             detail=f"Account verification incomplete. Unverified: {', '.join(unverified)}. Please complete verification first."
         )
     
-    # Establish dynamic cryptographic session (existing logic preserved)
+    # Deactivate all previous sessions for this user so run-live always finds the right one
+    db.query(CustomerSession).filter(
+        CustomerSession.user_id == username,
+        CustomerSession.is_active == True
+    ).update({"is_active": False})
+    db.commit()
+
     session_id = f"cust_sess_{secrets.token_hex(8)}"
     aes_key = generate_aes_key()
-    
     cust_session = CustomerSession(
         session_id=session_id,
         user_id=username,
