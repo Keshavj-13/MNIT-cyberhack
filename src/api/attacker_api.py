@@ -250,6 +250,81 @@ def run_demo_scenario(name: str, db: Session = Depends(get_db), attacker = Depen
 
     return {"user_id": sim_user_id, "session_id": sim_session_id, "steps": steps}
 
+
+@app.post("/attacker/scenarios/{name}/run-live")
+def run_live_scenario(name: str, db: Session = Depends(get_db), attacker = Depends(get_current_attacker)):
+    """Run scenario against the REAL demo_keshav session so all three surfaces synchronize.
+    Unlike run, this does NOT use sim_* isolation — events appear in admin Risk Dashboard
+    and the customer AURA console reacts (key rotation, trust level change).
+    """
+    import time
+    from src.db.models import CustomerSession
+    from src.api.customer_api import telemetry as customer_telemetry, shuffle_session_key
+
+    if name not in DEMO_SCENARIOS:
+        raise HTTPException(status_code=404, detail=f"Unknown scenario: {name}")
+
+    # Target the real demo_keshav session — no sim_ prefix
+    LIVE_USER = "demo_keshav"
+    cust_session = db.query(CustomerSession).filter(
+        CustomerSession.user_id == LIVE_USER,
+        CustomerSession.is_active == True
+    ).order_by(CustomerSession.updated_at.desc()).first()
+
+    if not cust_session:
+        raise HTTPException(status_code=404, detail="demo_keshav session not found. Customer must be logged in first.")
+
+    session_id = cust_session.session_id
+
+    steps = []
+    for step_idx, step in enumerate(DEMO_SCENARIOS[name]):
+        payload = {**step["payload"], "user_id": LIVE_USER, "session_id": session_id}
+
+        is_anomaly = (name == "full_fraud_chain" and step_idx >= 2) or \
+                     (name == "account_takeover") or \
+                     (name == "smishing_victim" and step_idx >= 2) or \
+                     (name == "elderly_victim" and step_idx == 2)
+
+        # inject telemetry into the REAL session
+        telemetry_payload = generate_simulated_telemetry(step_idx, is_anomaly, session_id, cust_session.aes_key)
+        customer_telemetry(telemetry_payload, db)
+
+        if "sms_text" in step["payload"]:
+            db.add(TelemetryData(session_id=session_id, type="session", data={"type": "sms_received", "sms_text": step["payload"]["sms_text"]}))
+        if "url" in step["payload"]:
+            db.add(TelemetryData(session_id=session_id, type="session", data={"url": step["payload"]["url"]}))
+            payload["current_url"] = step["payload"]["url"]
+        db.commit()
+
+        start_time = time.perf_counter()
+        result = run_evaluation(payload, db)
+        latency = (time.perf_counter() - start_time) * 1000
+
+        key_rotated = False
+        new_version = cust_session.key_version
+        if result.escalation_level > cust_session.risk_level:
+            new_key, new_version = shuffle_session_key(cust_session, result.escalation_level, db)
+            key_rotated = True
+
+        steps.append({
+            "label": step["label"],
+            "payload": step["payload"],
+            "result": {
+                "overall_risk": result.overall_risk,
+                "decision": result.decision,
+                "escalation_level": result.escalation_level,
+                "recommendation": result.recommendation,
+                "why_decision": result.why_decision,
+                "provider_breakdown": {k: v.dict() for k, v in result.provider_breakdown.items()},
+                "latency_ms": latency,
+                "key_rotated": key_rotated,
+                "key_version": new_version
+            }
+        })
+
+    return {"user_id": LIVE_USER, "session_id": session_id, "steps": steps, "live": True}
+
+
 # --- Raw Simulation & Evaluation Injection ---
 
 @app.post("/attacker/evaluate/raw")

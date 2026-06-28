@@ -88,18 +88,28 @@ export default function App() {
     setAuth(false); setUser(''); setPass('');
   };
 
+  const [liveMode, setLiveMode] = useState(false);
+
   const runScenario = async (key: string) => {
     setRunning(key); setResult(null); setAnimStep(-1);
+    const endpoint = liveMode
+      ? `${API_BASE}/attacker/scenarios/${key}/run-live`
+      : `${API_BASE}/attacker/scenarios/${key}/run`;
     try {
-      const res = await axios.post(`${API_BASE}/attacker/scenarios/${key}/run`);
+      const res = await axios.post(endpoint);
       const steps = res.data.steps || [];
-      setResult({ scenarioKey: key, steps, userId: res.data.user_id });
-      // animate steps one by one
+      setResult({ scenarioKey: key, steps, userId: res.data.user_id, live: res.data.live });
       for (let i = 0; i < steps.length; i++) {
         await new Promise(r => setTimeout(r, 600));
         setAnimStep(i);
       }
-    } catch { alert('Scenario failed'); }
+    } catch (e: any) {
+      if (liveMode && e.response?.status === 404) {
+        alert('LIVE MODE: demo_keshav must be logged into the Customer Portal first.');
+      } else {
+        alert('Scenario failed');
+      }
+    }
     finally { setRunning(null); }
   };
 
@@ -195,7 +205,20 @@ export default function App() {
           <div className="flex-1 flex overflow-hidden">
             {/* Scenario picker */}
             <div className="w-64 border-r border-white/[0.06] flex flex-col shrink-0 p-4 gap-2 overflow-y-auto">
-              <p className="text-[9px] text-neutral-500 uppercase font-bold tracking-wider mb-1">Select Scenario</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[9px] text-neutral-500 uppercase font-bold tracking-wider">Select Scenario</p>
+                <button
+                  onClick={() => setLiveMode(v => !v)}
+                  className={`text-[9px] font-bold px-2 py-1 rounded border uppercase tracking-wider transition-all ${
+                    liveMode
+                      ? 'bg-red-600 border-red-500 text-white animate-pulse'
+                      : 'bg-neutral-800 border-white/[0.1] text-neutral-400 hover:text-white'
+                  }`}
+                  title={liveMode ? 'LIVE: targets real demo_keshav session' : 'ISOLATED: uses sim_* session'}
+                >
+                  {liveMode ? '⚡ LIVE' : 'SIM'}
+                </button>
+              </div>
               {SCENARIOS.map(s => {
                 const Icon = s.icon;
                 const isRunning = running === s.key;
@@ -238,7 +261,12 @@ export default function App() {
                   <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
                     <div>
                       <h2 className="text-lg font-bold text-white">{scenarioMeta?.label}</h2>
-                      <p className="text-[10px] text-neutral-500 font-mono mt-0.5">DEMO SESSION · {result.steps.length} steps · isolated namespace</p>
+                      <p className="text-[10px] font-mono mt-0.5">
+          {(result as any).live
+            ? <span className="text-red-400 font-bold">LIVE TARGET: demo_keshav · {result.steps.length} steps · real session</span>
+            : <span className="text-neutral-500">DEMO SESSION · {result.steps.length} steps · isolated namespace</span>
+          }
+        </p>
                     </div>
                     {finalStep && (
                       <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold ${
