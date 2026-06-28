@@ -322,6 +322,9 @@ def run_live_scenario(name: str, db: Session = Depends(get_db), attacker = Depen
             }
         })
 
+        # pause between steps so customer UI (3s poll) can observe each escalation
+        time.sleep(3)
+
     return {"user_id": LIVE_USER, "session_id": session_id, "steps": steps, "live": True}
 
 

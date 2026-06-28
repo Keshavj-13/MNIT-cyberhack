@@ -259,8 +259,11 @@ export default function App() {
             riskLevel: res.data.risk_level
           });
         }
-      } catch (err) {
-        console.warn("Session status sync failed", err);
+      } catch (err: any) {
+        // 401 = session contained/revoked by risk engine — show lockout, not silent failure
+        if (err?.response?.status === 401) {
+          setCryptoState(prev => ({ ...prev, riskLevel: 4 }));
+        }
       }
     }, 3000);
     return () => clearInterval(interval);
