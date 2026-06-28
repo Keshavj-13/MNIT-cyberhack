@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import {
-  Flame, User, AlertTriangle, MessageSquare, UserX, Loader2, LogOut,
+  Flame, User, AlertTriangle, Mail, UserX, Loader2, LogOut,
   ShieldAlert, ShieldCheck, ShieldOff, Play, Target,
   Zap, Lock, Unlock, TrendingUp, Activity, Sliders
 } from 'lucide-react';
 import { usePreferences } from './Preferences';
 
 axios.defaults.withCredentials = true;
-const API_BASE = 'http://localhost:8003';
+const API_BASE = `${window.location.protocol}//${window.location.hostname}:8003`;
 
 const T: Record<string, any> = {
   en: { header_title: 'MNIT Threat Simulator', header_sub: 'Adversarial Operations Console', logout: 'Close Console' },
@@ -17,8 +17,8 @@ const T: Record<string, any> = {
 
 const SCENARIOS = [
   { key: 'normal_customer',  label: 'Normal Customer',    icon: User,           accent: 'emerald', desc: 'Baseline: no attack.' },
-  { key: 'elderly_victim',   label: 'Elderly Victim',     icon: AlertTriangle,  accent: 'amber',   desc: 'Smishing → fraudulent transfer.' },
-  { key: 'smishing_victim',  label: 'Smishing Victim',    icon: MessageSquare,  accent: 'orange',  desc: 'Phishing link → credential harvest.' },
+  { key: 'elderly_victim',   label: 'Elderly Victim',     icon: AlertTriangle,  accent: 'amber',   desc: 'Phishing link → fraudulent transfer.' },
+  { key: 'smishing_victim',  label: 'Phishing Victim',    icon: Mail,           accent: 'orange',  desc: 'Phishing link → credential harvest.' },
   { key: 'account_takeover', label: 'Account Takeover',   icon: UserX,          accent: 'red',     desc: 'Impossible travel → device exploit.' },
   { key: 'full_fraud_chain', label: 'Full Fraud Chain',   icon: Flame,          accent: 'red',     desc: 'Complete LURE→HOOK→EXPLOIT→MONETIZE.' },
 ];
@@ -238,7 +238,7 @@ export default function App() {
                   <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
                     <div>
                       <h2 className="text-lg font-bold text-white">{scenarioMeta?.label}</h2>
-                      <p className="text-[10px] text-neutral-500 font-mono mt-0.5">sim_user: {result.userId} · {result.steps.length} steps</p>
+                      <p className="text-[10px] text-neutral-500 font-mono mt-0.5">DEMO SESSION · {result.steps.length} steps · isolated namespace</p>
                     </div>
                     {finalStep && (
                       <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold ${
