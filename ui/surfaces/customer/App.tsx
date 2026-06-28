@@ -1017,8 +1017,13 @@ export default function App() {
                 </div>
               </div>
               <div className="cbi-auth-btn-group">
-                <button 
-                  className="cbi-header-auth-btn signin" 
+                {/* AURA badge — tells judge AI fraud detection is live before they even log in */}
+                <div style={{display:'flex',alignItems:'center',gap:'6px',background:'#0a1628',border:'1px solid #1e3a5f',borderRadius:'6px',padding:'4px 10px',marginRight:'8px'}}>
+                  <span style={{width:'7px',height:'7px',borderRadius:'50%',background:'#00e676',display:'inline-block',animation:'pulse 2s infinite'}}/>
+                  <span style={{color:'#4fc3f7',fontSize:'11px',fontWeight:'700',letterSpacing:'0.05em',fontFamily:'monospace'}}>AURA AI FRAUD DETECTION ACTIVE</span>
+                </div>
+                <button
+                  className="cbi-header-auth-btn signin"
                   onClick={() => { setShowLoginModal(true); setAuthModalTab('signin'); }}
                 >
                   🔒 Sign In
