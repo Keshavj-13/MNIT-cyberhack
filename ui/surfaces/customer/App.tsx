@@ -265,7 +265,7 @@ export default function App() {
           setCryptoState(prev => ({ ...prev, riskLevel: 4 }));
         }
       }
-    }, 3000);
+    }, 1000);   // 1s interval — attack completes in <1s, must catch escalation before containment
     return () => clearInterval(interval);
   }, [isAuthenticated, cryptoState]);
 
