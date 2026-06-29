@@ -155,3 +155,35 @@ export async function sendTelemetry(
     }
   }
 }
+
+export async function sendTelemetryBeacon(
+  sessionId: string,
+  keyVersion: number,
+  aesKey: string,
+  events: any[]
+): Promise<void> {
+  try {
+    const plaintext = JSON.stringify({ events });
+    const encrypted = await encryptData(plaintext, aesKey);
+    const payload = {
+      session_id: sessionId,
+      key_version: keyVersion,
+      ciphertext: encrypted.ciphertext,
+      nonce: encrypted.nonce,
+      tag: encrypted.tag
+    };
+    fetch(`${API_BASE}/customer/telemetry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true
+    });
+  } catch (error) {
+    fetch(`${API_BASE}/customer/telemetry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, events }),
+      keepalive: true
+    });
+  }
+}

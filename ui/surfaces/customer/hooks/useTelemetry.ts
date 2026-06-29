@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { sendTelemetry } from '../api';
+import { sendTelemetry, sendTelemetryBeacon } from '../api';
 
 interface TelemetryEvent {
   type: 'keystroke' | 'mouse' | 'session';
@@ -164,18 +164,22 @@ export const useTelemetry = (
 
     resetIdle();
 
+    let isFlushing = false;
     const flushBuffer = async () => {
-      if (buffer.current.length === 0) return;
+      if (buffer.current.length === 0 || isFlushing) return;
       const { sessionId: activeSid, keyVersion: activeKv, aesKey: activeKey } = cryptoRef.current;
       if (!activeSid || !activeKey) return;
 
+      isFlushing = true;
       const events = [...buffer.current];
-      buffer.current = [];
 
       try {
         await sendTelemetry(activeSid, activeKv, activeKey, events);
+        buffer.current = buffer.current.slice(events.length);
       } catch (err) {
-        console.warn('[Telemetry] Flush failed', err);
+        console.warn('[Telemetry] Flush failed, keeping events in buffer', err);
+      } finally {
+        isFlushing = false;
       }
     };
 
@@ -192,7 +196,16 @@ export const useTelemetry = (
       window.removeEventListener('click', resetIdle);
       clearTimeout(idleTimeout);
       clearInterval(interval);
-      flushBuffer();
+      
+      if (buffer.current.length > 0) {
+        const { sessionId: activeSid, keyVersion: activeKv, aesKey: activeKey } = cryptoRef.current;
+        if (activeSid && activeKey) {
+          sendTelemetryBeacon(activeSid, activeKv, activeKey, buffer.current).catch(err => {
+             console.warn('[Telemetry] Final beacon flush failed', err);
+          });
+        }
+        buffer.current = [];
+      }
     };
   }, [sessionId, aesKey]);
 };
