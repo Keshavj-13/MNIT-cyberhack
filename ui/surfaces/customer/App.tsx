@@ -1576,7 +1576,7 @@ export default function App() {
             <Landmark size={20} />
           </div>
           <div>
-            <h1 className="font-bold text-base leading-tight text-white">SecureTrust Bank</h1>
+            <h1 className="font-bold text-base leading-tight text-white">Central Bank of India</h1>
             <p className="text-[10px] text-neutral-500 font-semibold uppercase tracking-widest font-mono">Retail Banking</p>
           </div>
         </div>

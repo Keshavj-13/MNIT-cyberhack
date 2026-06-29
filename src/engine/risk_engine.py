@@ -28,9 +28,9 @@ class RiskEngine:
         # Default weights
         return {
             "TransactionRiskProvider": 0.4,
+            "BeaconBehavioralProvider": 0.2,
             "SocialEngineeringRiskProvider": 0.2,
-            "PhishingRiskProvider": 0.15,
-            "AccountTakeoverProvider": 0.15,
+            "NetworkRiskProvider": 0.1,
             "DeviceTrustProvider": 0.1
         }
 
@@ -60,11 +60,10 @@ class RiskEngine:
             "trust_recovery_speed": 1.0,
             "weights": {
                 "TransactionRiskProvider": 0.4,
+                "BeaconBehavioralProvider": 0.2,
                 "SocialEngineeringRiskProvider": 0.2,
-                "PhishingRiskProvider": 0.15,
-                "AccountTakeoverProvider": 0.15,
-                "DeviceTrustProvider": 0.1,
-                "BeaconBehavioralProvider": 0.05
+                "NetworkRiskProvider": 0.1,
+                "DeviceTrustProvider": 0.1
             }
         }
         if os.path.exists(path):

@@ -304,6 +304,10 @@ class BeaconBehavioralProvider(RiskProvider):
         self._stat_cache: Dict[str, tuple] = {}
         self.model_info = {"model_path": model_path, "model_loaded": False, "mode": "fallback",
                            "note": "BEACON VarCNN (Singh et al. 2026, arXiv:2605.10867). Embedding-drift mode."}
+                           
+        # Initialize legacy models for ensemble
+        self.ato_provider = AccountTakeoverProvider()
+
         if not _TORCH or not os.path.exists(model_path): return
         try:
             net = _VarCNN()
@@ -418,8 +422,21 @@ class BeaconBehavioralProvider(RiskProvider):
                     expl.append(f"Inference failed: {e}")
             else:
                 expl.append("No timing sequence — skipped.")
-        return RiskResult(provider_name="BeaconBehavioral (VarCNN)", risk_score=score,
-                          confidence=1.0 - score,
-                          severity="HIGH" if score >= 0.7 else ("MEDIUM" if score >= 0.4 else "LOW"),
-                          event_category="EXPLOIT" if score >= 0.5 else "NEUTRAL",
+                
+        # Ensemble with legacy ATO model
+        ato_score = 0.0
+        try:
+            ato_res = self.ato_provider.evaluate(data)
+            ato_score = ato_res.risk_score
+            if ato_score > 0.1:
+                expl.append(f"[Ensemble ATO] Risk {ato_score:.2f}")
+        except Exception as e:
+            pass
+
+        final_score = (score * 0.95) + (ato_score * 0.05)
+
+        return RiskResult(provider_name="BeaconBehavioral (Ensemble)", risk_score=final_score,
+                          confidence=1.0 - final_score,
+                          severity="HIGH" if final_score >= 0.7 else ("MEDIUM" if final_score >= 0.4 else "LOW"),
+                          event_category="EXPLOIT" if final_score >= 0.5 else "NEUTRAL",
                           explanations=expl, raw_features=data)

@@ -48,7 +48,7 @@ const LoginScreen = ({ sessionId, onResult, onLogin }: LoginScreenProps) => {
           <div className="bg-teal-500/10 border border-teal-500/20 rounded-xl p-2">
             <Lock className="text-teal-400" size={22} />
           </div>
-          <h1 className="text-xl font-bold text-white">SecureTrust Bank</h1>
+          <h1 className="text-xl font-bold text-white">Central Bank of India</h1>
         </div>
         <p className="text-center text-neutral-400 text-sm mb-6">Sign in to access your account</p>
 

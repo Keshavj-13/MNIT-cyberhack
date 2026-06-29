@@ -167,7 +167,7 @@ const BankSimulator = ({ onGlobalResult }: BankSimulatorProps) => {
         <header className="border-b border-white/5 px-4 py-3 flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-2 text-teal-500">
             <Landmark size={24} />
-            <span className="font-bold text-lg text-white">SecureTrust Bank</span>
+            <span className="font-bold text-lg text-white">Central Bank of India</span>
             <span className="text-xs text-neutral-500 ml-2">BankSimulator Demo</span>
           </div>
           <button

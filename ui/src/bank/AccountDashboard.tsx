@@ -23,7 +23,7 @@ const AccountDashboard = () => {
         </div>
         <div className="mt-4 flex items-center space-x-1 text-xs text-teal-100/70">
           <CreditCard size={14} />
-          <span>Rajesh Kumar · SecureTrust Bank</span>
+          <span>Rajesh Kumar ·  Central Bank of India</span>
         </div>
       </div>
 
