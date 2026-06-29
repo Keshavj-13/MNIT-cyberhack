@@ -242,7 +242,7 @@ def generate_biometric_visuals(event, db: Session):
         "model_internals": {
             "sequence_length": len(actual_iets),
             "cold_start_status": cold_start_status,
-            "inference_latency_ms": 38.4 if len(actual_iets) >= 64 else 0.0,
+            "inference_latency_ms": 38.4 if len(actual_iets) >= 64 else 0.0,  # estimated; BEACON latency not stored per-event
             "embedding_similarity": float(event.confidence) if len(actual_iets) >= 64 else None,
             "risk_score": event.overall_risk,
             "policy_tier": event.decision,
