@@ -15,7 +15,7 @@ Loop:
 import asyncio, datetime, collections, os
 from typing import Dict, List
 
-CYCLE_SECS   = 60
+CYCLE_SECS   = 12   # short cycle so ARIA fires visibly during a 15-second live demo
 WINDOW_MINS  = 10
 MIN_CLUSTER  = 3   # minimum events in a cluster before ARIA investigates
 MIN_RISK     = 0.3  # ignore noise events below this

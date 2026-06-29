@@ -111,7 +111,7 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Banking data
-  const [balances, setBalances] = useState<any>({ checking: { balance: 0 }, savings: { balance: 0 } });
+  const [balances, setBalances] = useState<any>(null); // null = loading, not yet fetched
   const [transactions, setTransactions] = useState<any[]>([]);
   const [beneficiaries, setBeneficiaries] = useState<any[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -216,10 +216,10 @@ export default function App() {
     if (!isAuthenticated) return;
     const interval = setInterval(async () => {
       try {
-        const res = await axios.get(`${API_BASE}/customer/auth/me`);
-        if (res.data.key_version !== cryptoState.keyVersion || res.data.risk_level !== cryptoState.riskLevel) {
+        const data = await getMe();
+        if (data.key_version !== cryptoState.keyVersion || data.risk_level !== cryptoState.riskLevel) {
           const fromLevel = cryptoState.riskLevel;
-          const toLevel = res.data.risk_level;
+          const toLevel = data.risk_level;
           
           const reason = toLevel > fromLevel
             ? "Unusual activity pattern detected"
@@ -235,33 +235,24 @@ export default function App() {
               toTier: `Level ${toLevel}`,
               reason,
               confidence: (0.85 + Math.random() * 0.1).toFixed(2),
-              sessionId: res.data.session_id.slice(0, 12) + "..."
+              sessionId: data.session_id.slice(0, 12) + "..."
             },
             ...prev
           ]);
 
           setTransitionOverlay({ from: fromLevel, to: toLevel });
-          const steps = [
-            `CRITICAL ENFORCEMENT: CRYPTO TIER LEVEL ${fromLevel} → LEVEL ${toLevel}`,
-            `Purging old session keys from secure cache...`,
-            `Regenerating symmetric key version v${res.data.key_version}...`,
-            `Restructuring Shamir secret thresholds...`,
-            `Securing active session endpoints with new cipher version...`,
-            `Transition complete. New cryptographic posture locked.`
-          ];
-          setTransitionSteps(steps);
+          setTransitionSteps([]);   // plain toast used now, steps no longer needed
           setCurrentStepIndex(0);
 
           setCryptoState({
-            aesKey: res.data.aes_key,
-            keyVersion: res.data.key_version,
-            sessionId: res.data.session_id,
-            riskLevel: res.data.risk_level
+            aesKey: data.aes_key,
+            keyVersion: data.key_version,
+            sessionId: data.session_id,
+            riskLevel: data.risk_level
           });
         }
       } catch (err: any) {
-        // 401 = session contained/revoked by risk engine — show lockout, not silent failure
-        if (err?.response?.status === 401) {
+        if ((err as any)?.status === 401 || (err as any)?.response?.status === 401) {
           setCryptoState(prev => ({ ...prev, riskLevel: 4 }));
         }
       }
@@ -1624,19 +1615,30 @@ export default function App() {
                 <span className="text-xs text-neutral-500">{new Date().toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' })}</span>
               </div>
 
-              {/* Balances */}
+              {/* Balances — skeleton while loading to avoid $0.00 flash */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/[0.06] rounded-xl p-6 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-4 opacity-5"><Landmark size={120} /></div>
-                  <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Current Account</p>
-                  <p className="text-xs font-mono text-neutral-500 mt-1">{balances?.checking?.account_number || 'TR-XXXXXXXXXXX'}</p>
-                  <p className="text-3xl font-bold mt-4 tracking-tight">${balances?.checking?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-                </div>
-                <div className="bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/[0.06] rounded-xl p-6 relative overflow-hidden">
-                  <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Savings Account</p>
-                  <p className="text-xs font-mono text-neutral-500 mt-1">{balances?.savings?.account_number || 'TR-XXXXXXXXXXX'}</p>
-                  <p className="text-3xl font-bold mt-4 tracking-tight">${balances?.savings?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-                </div>
+                {[
+                  { label: 'Current Account', key: 'checking' },
+                  { label: 'Savings Account', key: 'savings' },
+                ].map(({ label, key }) => (
+                  <div key={key} className="bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/[0.06] rounded-xl p-6 relative overflow-hidden">
+                    {key === 'checking' && <div className="absolute top-0 right-0 p-4 opacity-5"><Landmark size={120} /></div>}
+                    <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">{label}</p>
+                    {balances === null ? (
+                      <>
+                        <div className="mt-2 h-3 w-32 bg-neutral-800 rounded animate-pulse"></div>
+                        <div className="mt-4 h-8 w-48 bg-neutral-800 rounded animate-pulse"></div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs font-mono text-neutral-500 mt-1">{balances?.[key]?.account_number || 'CBI-XXXXXXXXX'}</p>
+                        <p className="text-3xl font-bold mt-4 tracking-tight">
+                          ₹{(balances?.[key]?.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                ))}
               </div>
 
               {/* Cryptographic Authority & Performance tradeoff card */}
@@ -1673,12 +1675,15 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.04] font-mono">
+                      {transactions.length === 0 && (
+                        <tr><td colSpan={3} className="py-6 text-center text-xs text-neutral-600">No recent transactions</td></tr>
+                      )}
                       {transactions.map((tx: any) => (
                         <tr key={tx.id} className="hover:bg-white/[0.01]">
-                          <td className="py-3 text-neutral-400">{new Date(tx.date).toLocaleDateString()}</td>
+                          <td className="py-3 text-neutral-400">{new Date(tx.date).toLocaleDateString('en-IN')}</td>
                           <td className="py-3 text-white font-sans">{tx.description}</td>
                           <td className={`py-3 text-right font-bold ${tx.amount > 0 ? 'text-teal-400' : 'text-neutral-300'}`}>
-                            {tx.amount > 0 ? `+$${tx.amount.toFixed(2)}` : `-$${Math.abs(tx.amount).toFixed(2)}`}
+                            {tx.amount > 0 ? `+₹${tx.amount.toFixed(2)}` : `-₹${Math.abs(tx.amount).toFixed(2)}`}
                           </td>
                         </tr>
                       ))}
