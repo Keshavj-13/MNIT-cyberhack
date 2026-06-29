@@ -221,9 +221,9 @@ export default function App() {
           const fromLevel = cryptoState.riskLevel;
           const toLevel = res.data.risk_level;
           
-          const reason = toLevel > fromLevel 
-            ? "Behavioral drift detected (VarCNN anomaly confidence evaluation)"
-            : "Cryptographic trust recovered via verification verification";
+          const reason = toLevel > fromLevel
+            ? "Unusual activity pattern detected"
+            : "Session behaviour returned to normal";
           
           setEscalationNotifications(prev => [
             {
@@ -631,75 +631,49 @@ export default function App() {
     return keyBase64.slice(0, 8) + ' •••••••••••••••• ' + keyBase64.slice(-8);
   };
 
-  // RISK containment level (Level 4) Lockout Screen
+  // Session protected screen (containment) — customer-facing, no technical detail
   if (cryptoState.riskLevel >= 4) {
     return (
-      <div className="flex h-screen bg-neutral-950 text-white font-sans items-center justify-center p-6">
-        <div className="max-w-md w-full bg-neutral-900 border border-red-500/20 rounded-xl p-8 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1.5 bg-red-600 animate-pulse"></div>
-          <div className="flex flex-col items-center text-center space-y-5">
-            <div className="grid place-items-center w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 text-red-500 animate-bounce">
-              <Lock size={32} />
-            </div>
-            <h1 className="text-xl font-bold tracking-tight text-white">Cryptographic Lockout</h1>
-            <p className="text-sm text-neutral-400">
-              The Security Threat Detection Engine has activated Level 4 containment protocol (Session Revocation).
-            </p>
-            <div className="w-full bg-neutral-950 p-4 border border-white/[0.04] rounded-lg text-left text-xs font-mono space-y-2">
-              <div><span className="text-neutral-500">SESSION_ID:</span> <span className="text-red-400">{cryptoState.sessionId}</span></div>
-              <div><span className="text-neutral-500">KEYS:</span> <span className="text-red-400">REVOKED & PURGED</span></div>
-              <div><span className="text-neutral-500">ALGORITHM:</span> <span className="text-neutral-500">AES-256-GCM (Terminated)</span></div>
-              <div><span className="text-neutral-500">RISK_LEVEL:</span> <span className="text-red-500 font-bold">CONTAINMENT (CRITICAL)</span></div>
-            </div>
-            <p className="text-xs text-neutral-500 italic">
-              Your cryptographic keys have been purged from database cache. To unlock your account, please verify identity in person.
-            </p>
-            <button 
-              onClick={handleLogout}
-              className="w-full py-2.5 rounded-lg bg-white text-black font-semibold text-sm hover:bg-neutral-200 transition-colors"
-            >
-              Reset Session
-            </button>
+      <div className="flex h-screen bg-white font-sans items-center justify-center p-6" style={{ fontFamily: 'Inter, Arial, sans-serif' }}>
+        <div className="max-w-md w-full text-center space-y-6">
+          <div className="w-20 h-20 rounded-full bg-red-50 border-2 border-red-200 grid place-items-center mx-auto">
+            <Lock size={36} className="text-red-500" />
           </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Session Secured</h1>
+            <p className="text-gray-500 mt-2 leading-relaxed">
+              We detected unusual activity and automatically secured your account.<br/>
+              This is to protect you from unauthorised access.
+            </p>
+          </div>
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-700 flex items-center gap-3">
+            <CheckCircle size={18} className="shrink-0 text-green-500" />
+            <span>Your account and funds are safe. No transactions were affected.</span>
+          </div>
+          <p className="text-sm text-gray-400">Please sign in again to continue banking.</p>
+          <button onClick={handleLogout}
+            className="w-full py-3 rounded-xl font-semibold text-sm text-white transition-all"
+            style={{ background: 'linear-gradient(135deg, #003893, #0052cc)' }}>
+            Sign In Again
+          </button>
+          <p className="text-xs text-gray-400">Central Bank of India · AURA Security</p>
         </div>
       </div>
     );
   }
 
-  // Visual Key Shuffling Overlay (plays when key rotates)
-  if (keyRotatedAnim && keyRotationInfo) {
+  // Brief security update (key rotation) — shows for ~2.5s
+  if (keyRotatedAnim) {
     return (
-      <div className="flex h-screen bg-neutral-950 text-white font-sans items-center justify-center p-6">
-        <div className="max-w-md w-full bg-neutral-900 border border-teal-500/20 rounded-xl p-8 shadow-2xl relative text-center space-y-6">
-          <div className="grid place-items-center w-16 h-16 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 mx-auto animate-spin">
-            <RefreshCw size={32} />
+      <div className="flex h-screen bg-white font-sans items-center justify-center p-6" style={{ fontFamily: 'Inter, Arial, sans-serif' }}>
+        <div className="max-w-sm w-full text-center space-y-4">
+          <div className="w-16 h-16 rounded-full bg-blue-50 border-2 border-blue-200 grid place-items-center mx-auto animate-spin">
+            <Shield size={28} className="text-blue-600" />
           </div>
-          <h2 className="text-lg font-bold text-white tracking-wide">SHUFFLING SESSION KEYS</h2>
-          <p className="text-sm text-neutral-400">
-            Threat levels shifted. Re-negotiating symmetric cryptographic keys to isolate session state...
-          </p>
-          <div className="bg-neutral-950 p-4 rounded-lg border border-white/[0.04] text-left text-xs font-mono space-y-2">
-            <div>
-              <span className="text-neutral-500">KEY_VERSION:</span>{' '}
-              <span className="text-neutral-300">v{keyRotationInfo.oldVersion}</span>
-              <span className="text-teal-400"> → v{keyRotationInfo.newVersion}</span>
-            </div>
-            <div>
-              <span className="text-neutral-500">RISK_LEVEL:</span>{' '}
-              <span className="text-neutral-300">Level {cryptoState.riskLevel}</span>
-              <span className="text-teal-400"> → Level {keyRotationInfo.riskLevel}</span>
-            </div>
-            <div className="truncate">
-              <span className="text-neutral-500">OLD_KEY:</span>{' '}
-              <span className="text-neutral-400 text-[10px]">{formatKey(keyRotationInfo.oldKey)}</span>
-            </div>
-            <div className="truncate">
-              <span className="text-teal-400 font-semibold">NEW_KEY:</span>{' '}
-              <span className="text-teal-300 text-[10px]">{formatKey(keyRotationInfo.newKey)}</span>
-            </div>
-          </div>
-          <div className="w-full h-1 bg-neutral-800 rounded-full overflow-hidden">
-            <div className="h-full bg-teal-500 animate-[pulse_1.5s_infinite] w-full"></div>
+          <h2 className="text-lg font-bold text-gray-900">Updating Security</h2>
+          <p className="text-sm text-gray-500">Your account protection is being refreshed. This takes just a moment.</p>
+          <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full bg-blue-500 animate-[pulse_1s_infinite] w-full rounded-full"></div>
           </div>
         </div>
       </div>
@@ -1556,7 +1530,7 @@ export default function App() {
 
                 <div className="cbi-login-footer">
                   <span>
-                    🔒 Session secured via AES-256-GCM & HS256 JWT
+                    🔒 Protected by AURA Behavioural Security
                   </span>
                 </div>
               </div>
@@ -1567,53 +1541,34 @@ export default function App() {
     );
   }
 
+  // Security status from backend risk level only
+  const secStatus = (() => {
+    if (cryptoState.riskLevel >= 3) return { dot: 'bg-orange-400', text: 'text-orange-300', border: 'border-orange-500/30', bg: 'bg-orange-500/10', label: 'Verification Required', pulse: true };
+    if (cryptoState.riskLevel === 2) return { dot: 'bg-yellow-400',  text: 'text-yellow-300',  border: 'border-yellow-500/30',  bg: 'bg-yellow-500/10',  label: 'Monitoring',             pulse: true };
+    return { dot: 'bg-emerald-400', text: 'text-emerald-300', border: 'border-emerald-500/30', bg: 'bg-emerald-500/10', label: 'Protected', pulse: false };
+  })();
+
   return (
     <div className="flex h-screen bg-neutral-950 text-white font-sans flex-col">
-      {/* Top Header */}
-      <header className="border-b border-white/[0.06] bg-neutral-950 px-6 py-4 flex items-center justify-between shrink-0">
-        <div className="flex items-center space-x-3 text-teal-400">
-          <div className="w-9 h-9 rounded-lg bg-teal-500/10 border border-teal-500/20 grid place-items-center">
-            <Landmark size={20} />
+      {/* Header — banking branding + security status only */}
+      <header className="border-b border-white/[0.06] bg-neutral-950 px-6 py-3.5 flex items-center justify-between shrink-0">
+        <div className="flex items-center space-x-3">
+          <div className="w-9 h-9 rounded-lg grid place-items-center" style={{ background: 'linear-gradient(135deg, #003893, #001f5c)' }}>
+            <Landmark size={18} className="text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-base leading-tight text-white">Central Bank of India</h1>
-            <p className="text-[10px] text-neutral-500 font-semibold uppercase tracking-widest font-mono">Retail Banking</p>
+            <h1 className="font-bold text-sm leading-tight text-white">Central Bank of India</h1>
+            <p className="text-[10px] text-neutral-500 font-medium">Internet Banking · Welcome, <span className="text-neutral-300">{username}</span></p>
           </div>
         </div>
-
-        {/* Cryptographic Badges */}
         <div className="flex items-center space-x-3">
-          <button 
-            onClick={() => setShowCryptoModal(true)}
-            className="flex items-center gap-2 bg-teal-500/10 hover:bg-teal-500/15 border border-teal-500/20 text-teal-300 px-3 py-1.5 rounded-full text-xs font-mono transition-all group"
-          >
-            <span className="w-2 h-2 rounded-full bg-teal-400 group-hover:animate-ping"></span>
-            <span>AES-256-GCM: active</span>
-            <Key size={13} className="opacity-70" />
-          </button>
-
-          <button 
-            onClick={() => setShowBioHud(prev => !prev)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono transition-all ${
-              showBioHud 
-                ? 'bg-amber-500/10 border border-amber-500/30 text-amber-300' 
-                : 'bg-neutral-900 border border-white/[0.06] text-neutral-400 hover:text-white'
-            }`}
-          >
-            <Info size={13} className="text-amber-400 animate-pulse" />
-            <span>Biometrics HUD: {showBioHud ? 'Visible' : 'Hidden'}</span>
-          </button>
-          
-          <div className="bg-neutral-900 border border-white/[0.06] px-3 py-1.5 rounded-full text-xs font-mono text-neutral-400 flex items-center gap-1.5">
-            <span>TTL:</span>
-            <span className="text-white font-semibold">{formatTtl(sessionTtl)}</span>
+          {/* Security status pill — the only security indicator the customer sees */}
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${secStatus.bg} ${secStatus.border} ${secStatus.text}`}>
+            <span className={`w-2 h-2 rounded-full ${secStatus.dot} ${secStatus.pulse ? 'animate-pulse' : ''}`}></span>
+            <span>{secStatus.label}</span>
           </div>
-
-          <button 
-            onClick={handleLogout}
-            className="p-2 text-neutral-500 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
-            title="Disconnect Cryptographic Session"
-          >
+          <div className="text-xs text-neutral-500">Session: <span className="text-neutral-300 font-mono">{formatTtl(sessionTtl)}</span></div>
+          <button onClick={handleLogout} className="p-2 text-neutral-500 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors" title="Sign Out">
             <LogOut size={16} />
           </button>
         </div>
@@ -1630,57 +1585,31 @@ export default function App() {
             }`}
           >
             <LayoutDashboard size={18} />
-            <span>Account Summary</span>
+            <span>Dashboard</span>
           </button>
-          <button 
-            onClick={() => setActiveTab('transfer')}
-            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === 'transfer' ? 'bg-teal-500/10 text-teal-300' : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
-            }`}
-          >
-            <Send size={18} />
-            <span>Send Funds</span>
+          <button onClick={() => setActiveTab('transfer')}
+            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${activeTab==='transfer'?'bg-teal-500/10 text-teal-300':'text-neutral-400 hover:text-white hover:bg-white/[0.04]'}`}>
+            <Send size={18} /><span>Transfer Money</span>
           </button>
-          <button 
-            onClick={() => setActiveTab('beneficiaries')}
-            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === 'beneficiaries' ? 'bg-teal-500/10 text-teal-300' : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
-            }`}
-          >
-            <Users size={18} />
-            <span>Manage Payees</span>
+          <button onClick={() => setActiveTab('beneficiaries')}
+            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${activeTab==='beneficiaries'?'bg-teal-500/10 text-teal-300':'text-neutral-400 hover:text-white hover:bg-white/[0.04]'}`}>
+            <Users size={18} /><span>Beneficiaries</span>
           </button>
-          <button 
-            onClick={() => setActiveTab('statements')}
-            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === 'statements' ? 'bg-teal-500/10 text-teal-300' : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
-            }`}
-          >
-            <FileText size={18} />
-            <span>Statement Ledger</span>
+          <button onClick={() => setActiveTab('statements')}
+            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${activeTab==='statements'?'bg-teal-500/10 text-teal-300':'text-neutral-400 hover:text-white hover:bg-white/[0.04]'}`}>
+            <FileText size={18} /><span>Statements</span>
           </button>
-          <button 
-            onClick={() => setActiveTab('support')}
-            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === 'support' ? 'bg-teal-500/10 text-teal-300' : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
-            }`}
-          >
-            <HelpCircle size={18} />
-            <span>Support Desk</span>
+          <button onClick={() => setActiveTab('support')}
+            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${activeTab==='support'?'bg-teal-500/10 text-teal-300':'text-neutral-400 hover:text-white hover:bg-white/[0.04]'}`}>
+            <HelpCircle size={18} /><span>Help & Support</span>
           </button>
 
           <div className="flex-1"></div>
 
-          {/* Secure indicator */}
-          <div className="bg-neutral-900 border border-white/[0.04] p-3 rounded-lg text-center space-y-1.5">
-            <div className="flex items-center justify-center gap-1.5 text-xs text-neutral-400 font-semibold uppercase tracking-wider">
-              <Shield size={12} className="text-teal-400" />
-              <span>Hardened Security</span>
-            </div>
-            <div className="text-[10px] text-neutral-500 font-mono">
-              Key Version: v{cryptoState.keyVersion}<br/>
-              Security Level: {cryptoState.riskLevel === 1 ? 'L1: Nominal' : cryptoState.riskLevel === 2 ? 'L2: step-up' : 'L3: Restricted'}
-            </div>
+          {/* Security status in sidebar — color only, no technical detail */}
+          <div className={`flex items-center gap-2.5 p-3 rounded-lg border ${secStatus.bg} ${secStatus.border}`}>
+            <span className={`w-2 h-2 rounded-full shrink-0 ${secStatus.dot} ${secStatus.pulse?'animate-pulse':''}`}></span>
+            <span className={`text-xs font-semibold ${secStatus.text}`}>{secStatus.label}</span>
           </div>
         </aside>
 
@@ -1692,148 +1621,48 @@ export default function App() {
             <div className="max-w-4xl mx-auto space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
                 <h2 className="text-xl font-bold tracking-tight">Account Summary</h2>
-                <span className="text-xs text-neutral-500 font-mono">Decrypted under session key v{cryptoState.keyVersion}</span>
+                <span className="text-xs text-neutral-500">{new Date().toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' })}</span>
               </div>
 
               {/* Balances */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/[0.06] rounded-xl p-6 relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-4 opacity-5"><Landmark size={120} /></div>
-                  <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Secure Checking</p>
+                  <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Current Account</p>
                   <p className="text-xs font-mono text-neutral-500 mt-1">{balances?.checking?.account_number || 'TR-XXXXXXXXXXX'}</p>
                   <p className="text-3xl font-bold mt-4 tracking-tight">${balances?.checking?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
                 </div>
                 <div className="bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/[0.06] rounded-xl p-6 relative overflow-hidden">
-                  <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Secure Savings</p>
+                  <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Savings Account</p>
                   <p className="text-xs font-mono text-neutral-500 mt-1">{balances?.savings?.account_number || 'TR-XXXXXXXXXXX'}</p>
                   <p className="text-3xl font-bold mt-4 tracking-tight">${balances?.savings?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
                 </div>
               </div>
 
               {/* Cryptographic Authority & Performance tradeoff card */}
-              <div className={`bg-neutral-900 border transition-all duration-500 rounded-xl p-6 space-y-4 shadow-lg ${
-                cryptoState.riskLevel === 1 
-                  ? "border-emerald-500/20 shadow-emerald-500/[0.02]" 
-                  : cryptoState.riskLevel === 2 
-                    ? "border-amber-500/30 shadow-amber-500/[0.05]" 
-                    : cryptoState.riskLevel === 3 
-                      ? "border-orange-500/40 shadow-orange-500/[0.1] animate-pulse" 
-                      : "border-red-500/50 shadow-red-500/[0.2] animate-[pulse_2s_infinite]"
+              {/* Security Status — consequence only, no mechanism */}
+              <div className={`rounded-xl border p-5 transition-all duration-700 flex items-center gap-4 ${
+                cryptoState.riskLevel>=3?'border-orange-500/30 bg-orange-500/[0.05]':cryptoState.riskLevel===2?'border-yellow-500/25 bg-yellow-500/[0.05]':'border-emerald-500/20 bg-emerald-500/[0.04]'
               }`}>
-                <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
-                  <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
-                    <Key className="text-teal-400" size={16} />
-                    <span>AURA Session Cryptographic Authority Console</span>
-                  </h3>
-                  {cryptoState.riskLevel === 1 ? (
-                    <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider animate-pulse">
-                      ● Trusted Session
-                    </span>
-                  ) : cryptoState.riskLevel === 2 ? (
-                    <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider animate-pulse">
-                      ● Elevated Monitoring
-                    </span>
-                  ) : cryptoState.riskLevel === 3 ? (
-                    <span className="bg-orange-500/10 text-orange-400 border border-orange-500/20 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider animate-pulse">
-                      ● Restricted Session
-                    </span>
-                  ) : (
-                    <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider animate-pulse">
-                      ● Contained Session
-                    </span>
-                  )}
+                <div className={`w-11 h-11 rounded-full grid place-items-center shrink-0 border ${secStatus.bg} ${secStatus.border}`}>
+                  <Shield size={20} className={secStatus.text} />
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Left Column: Crypto specs */}
-                  <div className="space-y-3">
-                    <h4 className="text-[10px] text-neutral-500 uppercase font-bold tracking-wider">Cryptographic Parameters</h4>
-                    <div className="space-y-2 text-xs font-mono">
-                      <div className="flex justify-between py-1 border-b border-white/[0.02]">
-                        <span className="text-neutral-400">Current Trust Level:</span>
-                        <span className={`font-bold ${
-                          cryptoState.riskLevel === 1 
-                            ? 'text-emerald-400' 
-                            : cryptoState.riskLevel === 2 
-                              ? 'text-amber-400' 
-                              : 'text-red-400'
-                        }`}>
-                          {cryptoState.riskLevel === 1 ? 'HIGH (TRUSTED)' : cryptoState.riskLevel === 2 ? 'MEDIUM (SUSPICIOUS)' : cryptoState.riskLevel === 3 ? 'LOW (RESTRICTED)' : 'ZERO (CONTAINED)'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-white/[0.02]">
-                        <span className="text-neutral-400">Protection Mode:</span>
-                        <span className={`font-bold uppercase ${
-                          cryptoState.riskLevel === 1 
-                            ? 'text-emerald-400' 
-                            : cryptoState.riskLevel === 2 
-                              ? 'text-amber-400' 
-                              : cryptoState.riskLevel === 3 
-                                ? 'text-orange-400 animate-pulse' 
-                                : 'text-red-400 animate-bounce'
-                        }`}>
-                          {cryptoState.riskLevel === 1 ? 'Normal' : cryptoState.riskLevel === 2 ? 'Elevated' : cryptoState.riskLevel === 3 ? 'Restricted' : 'Contained'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-white/[0.02]">
-                        <span className="text-neutral-400">Cryptographic Tier:</span>
-                        <span className="text-white font-bold">Level {cryptoState.riskLevel}</span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-white/[0.02]">
-                        <span className="text-neutral-400">Active Cipher:</span>
-                        <span className="text-teal-400 font-bold">AES-256-CTR (Shuffled)</span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-white/[0.02]">
-                        <span className="text-neutral-400">Key Version:</span>
-                        <span className="text-white font-bold">v{cryptoState.keyVersion}</span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-white/[0.02]">
-                        <span className="text-neutral-400">Key Rotation Count:</span>
-                        <span className="text-neutral-300">{cryptoState.keyVersion - 1} rotations</span>
-                      </div>
-                      <div className="flex justify-between py-1">
-                        <span className="text-neutral-400">Authority Level:</span>
-                        <span className={`font-bold ${cryptoState.riskLevel >= 3 ? 'text-red-400' : 'text-emerald-400'}`}>
-                          {cryptoState.riskLevel >= 3 ? 'READ-ONLY (FROZEN)' : 'FULL TRANSFER'}
-                        </span>
-                      </div>
-                    </div>
+                <div className="flex-1">
+                  <div className={`text-sm font-bold ${secStatus.text}`}>
+                    {cryptoState.riskLevel===1?'Your account is protected':cryptoState.riskLevel===2?'Monitoring unusual activity':cryptoState.riskLevel===3?'Additional verification required':'Session secured'}
                   </div>
-
-                  {/* Right Column: Performance and trade-off metrics */}
-                  <div className="space-y-3">
-                    <h4 className="text-[10px] text-neutral-500 uppercase font-bold tracking-wider">Performance & Operational Costs</h4>
-                    <div className="space-y-2 text-xs font-mono">
-                      <div className="flex justify-between py-1 border-b border-white/[0.02]">
-                        <span className="text-neutral-400">VarCNN Inference Latency:</span>
-                        <span className="text-amber-400">38.4 ms</span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-white/[0.02]">
-                        <span className="text-neutral-400">Crypto Shuffling Time:</span>
-                        <span className="text-amber-400">2.1 ms</span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-white/[0.02]">
-                        <span className="text-neutral-400">Total API Overhead:</span>
-                        <span className="text-amber-400 font-bold">40.5 ms</span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-white/[0.02]">
-                        <span className="text-neutral-400">Memory Allocation:</span>
-                        <span className="text-neutral-300">1.2 MB (Key Cache)</span>
-                      </div>
-                      <div className="flex justify-between py-1">
-                        <span className="text-neutral-400">Security Friction Cost:</span>
-                        <span className={`font-bold ${cryptoState.riskLevel === 1 ? 'text-emerald-400' : cryptoState.riskLevel === 2 ? 'text-amber-400' : 'text-red-400'}`}>
-                          {cryptoState.riskLevel === 1 ? '0% (Frictionless)' : cryptoState.riskLevel === 2 ? 'OTP Step-up Auth' : cryptoState.riskLevel === 3 ? 'Transfers Frozen' : 'Terminated'}
-                        </span>
-                      </div>
-                    </div>
+                  <div className="text-xs text-neutral-400 mt-1 leading-relaxed">
+                    {cryptoState.riskLevel===1&&'Everything looks normal. Your funds and account are fully secure.'}
+                    {cryptoState.riskLevel===2&&"We noticed something that differs from your usual banking activity. We're keeping a close watch."}
+                    {cryptoState.riskLevel>=3&&'Some sensitive transactions are temporarily restricted. A verification step may be required.'}
                   </div>
                 </div>
+                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${secStatus.dot} ${secStatus.pulse?'animate-pulse':''}`}></span>
               </div>
 
-              {/* Recent Ledger */}
+              {/* Recent Transactions */}
               <div className="bg-neutral-900 border border-white/[0.06] rounded-xl p-6 space-y-4">
-                <h3 className="text-sm font-semibold tracking-wide text-white">Recent Statement Ledger</h3>
+                <h3 className="text-sm font-semibold tracking-wide text-white">Recent Transactions</h3>
                 <div className="divide-y divide-white/[0.06] overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
@@ -1864,8 +1693,8 @@ export default function App() {
           {activeTab === 'transfer' && (
             <div className="max-w-xl mx-auto space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
-                <h2 className="text-xl font-bold tracking-tight">Send Funds</h2>
-                <span className="text-xs text-neutral-500 font-mono">AES-256 encrypted payload</span>
+                <h2 className="text-xl font-bold tracking-tight">Transfer Money</h2>
+                <span className="text-xs text-neutral-500">Secure transfer</span>
               </div>
 
               {transferStatus && (
@@ -1902,18 +1731,18 @@ export default function App() {
                   />
                 </div>
 
-                <div className="bg-neutral-950 p-4 rounded-lg border border-white/[0.04] text-[11px] text-neutral-400 space-y-1">
-                  <span className="font-semibold text-neutral-300 block mb-1">Cryptographic Policy Notice</span>
-                  <p>Upon submission, this request payload is encrypted locally using the active session key (v{cryptoState.keyVersion}).</p>
-                  <p>In accordance with the Threat Engine, transaction evaluation will execute silently. Risk levels may trigger immediate session key shuffling.</p>
-                </div>
-
-                <button 
+                {cryptoState.riskLevel >= 3 && (
+                  <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg text-xs text-orange-300 flex items-center gap-2">
+                    <AlertTriangle size={14} className="shrink-0" />
+                    <span>Some transfers are temporarily restricted while we verify your identity.</span>
+                  </div>
+                )}
+                <button
                   type="submit"
                   disabled={isTransferring || !selectedBeneficiaryId || !transferAmount}
                   className="w-full py-3 bg-teal-500 hover:bg-teal-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
-                  {isTransferring ? 'Encrypting & Dispatching...' : 'Secure Transfer'}
+                  {isTransferring ? 'Processing transfer...' : 'Send Money'}
                 </button>
               </form>
             </div>
@@ -1923,21 +1752,19 @@ export default function App() {
           {activeTab === 'beneficiaries' && (
             <div className="max-w-3xl mx-auto space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
-                <h2 className="text-xl font-bold tracking-tight">Manage Payees</h2>
-                <span className="text-xs text-neutral-500 font-mono font-semibold">Active Session: {cryptoState.sessionId}</span>
+                <h2 className="text-xl font-bold tracking-tight">Beneficiaries</h2>
+                <span className="text-xs text-neutral-500">Manage who you can send money to</span>
               </div>
 
               {addPayeeStatus === 'added' && (
                 <div className="p-4 bg-teal-500/10 border border-teal-500/25 rounded-lg flex items-center gap-3 text-sm text-teal-300">
-                  <CheckCircle size={18} />
-                  <span>Beneficiary added and registered with the threat monitoring grid successfully.</span>
+                  <CheckCircle size={18} /><span>Beneficiary added successfully.</span>
                 </div>
               )}
 
               {addPayeeStatus === 'verification_required' && (
                 <div className="p-4 bg-amber-500/10 border border-amber-500/25 rounded-lg flex items-center gap-3 text-sm text-amber-300">
-                  <AlertTriangle size={18} />
-                  <span>Payee addition flagged. Key shuffled and step-up confirmation required on next transfer.</span>
+                  <AlertTriangle size={18} /><span>We'll ask you to verify this payee the first time you send money to them.</span>
                 </div>
               )}
 
@@ -2013,8 +1840,8 @@ export default function App() {
           {activeTab === 'statements' && (
             <div className="max-w-xl mx-auto space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
-                <h2 className="text-xl font-bold tracking-tight">Statement Ledger</h2>
-                <span className="text-xs text-neutral-500 font-mono">Vault Storage</span>
+                <h2 className="text-xl font-bold tracking-tight">Account Statements</h2>
+                <span className="text-xs text-neutral-500">Download or view your statements</span>
               </div>
 
               <div className="bg-neutral-900 border border-white/[0.06] rounded-xl divide-y divide-white/[0.06] overflow-hidden">
@@ -2035,10 +1862,10 @@ export default function App() {
                       </div>
                     </div>
                     <button 
-                      onClick={() => alert("Statement decrypted and opened in secure viewport.")}
-                      className="text-[11px] text-teal-400 font-semibold hover:underline font-mono"
+                      onClick={() => alert("Your statement is ready to download.")}
+                      className="text-[11px] text-teal-400 font-semibold hover:underline"
                     >
-                      Retrieve ({item.size})
+                      Download ({item.size})
                     </button>
                   </div>
                 ))}
@@ -2061,23 +1888,21 @@ export default function App() {
                   
                   <div className="space-y-4">
                     <div className="space-y-1.5">
-                      <h4 className="text-xs font-bold text-teal-400">What is cryptographic session key rotation?</h4>
+                      <h4 className="text-xs font-bold text-teal-400">Why did my security status change colour?</h4>
                       <p className="text-[11px] text-neutral-400 leading-relaxed">
-                        To protect your account details from theft and hijacking, our system continuously monitors threats. If anomaly indicators are triggered, symmetric AES-256 session keys are shuffled in real-time, isolating past payloads from upcoming ones.
+                        AURA continuously monitors how your session behaves. If something looks different from your usual pattern — such as typing speed or mouse movement — the indicator changes to let you know we're paying closer attention.
                       </p>
                     </div>
-
                     <div className="space-y-1.5">
-                      <h4 className="text-xs font-bold text-teal-400">Why am I prompted for step-up verification?</h4>
+                      <h4 className="text-xs font-bold text-teal-400">Why was I asked to verify with a code?</h4>
                       <p className="text-[11px] text-neutral-400 leading-relaxed">
-                        Step-up Verification (OTP) is activated during moderate-risk states (such as new payees or VPN usage). Enter the code sent to your registered device to verify the transfer's cryptographic signature.
+                        We send a one-time verification code to your registered mobile when we detect unusual activity, or when you're sending money to a new person. This is to make sure it's really you.
                       </p>
                     </div>
-
                     <div className="space-y-1.5">
-                      <h4 className="text-xs font-bold text-teal-400">What happens if a session enters lockout?</h4>
+                      <h4 className="text-xs font-bold text-teal-400">What happens if my session is secured automatically?</h4>
                       <p className="text-[11px] text-neutral-400 leading-relaxed">
-                        If extreme risk is flagged (Level 4), session containment executes immediately. All active session keys are revoked and blacklisted globally, logging out the active browser immediately to freeze account activity.
+                        If we detect activity that doesn't match your normal behaviour, we may automatically secure your session and ask you to sign in again. Your account and funds remain safe throughout.
                       </p>
                     </div>
                   </div>
@@ -2134,137 +1959,6 @@ export default function App() {
 
         </main>
 
-        {/* Biometric HUD Slide-out Panel */}
-        {showBioHud && (
-          <aside className="w-80 border-l border-white/[0.06] bg-neutral-950 flex flex-col shrink-0 overflow-y-auto p-5 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
-              <div className="flex items-center space-x-2 text-amber-400">
-                <Info size={16} className="animate-pulse" />
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">AURA Biometrics HUD</h3>
-              </div>
-              <button 
-                onClick={() => setShowBioHud(false)}
-                className="text-[10px] text-neutral-500 hover:text-white"
-              >
-                Close
-              </button>
-            </div>
-
-            {/* AI Model Status */}
-            <div className="bg-neutral-900 border border-white/[0.04] p-4 rounded-xl space-y-3">
-              <div>
-                <p className="text-[9px] text-neutral-500 uppercase font-bold tracking-wider">VarCNN Classifier State</p>
-                {bioStats.warmupCount < 3 ? (
-                  <p className="text-xs font-bold text-amber-400 flex items-center gap-1.5 mt-1">
-                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"/>
-                    WARMUP ENROLLING ({bioStats.warmupCount}/3)
-                  </p>
-                ) : bioStats.drift < 0.92 ? (
-                  <p className="text-xs font-bold text-red-400 flex items-center gap-1.5 mt-1">
-                    <span className="w-2 h-2 rounded-full bg-red-400"/>
-                    COMPROMISED DRIFT (ANOMALY)
-                  </p>
-                ) : (
-                  <p className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 mt-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"/>
-                    ENROLLED & CONSISTENT
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <div className="flex justify-between text-[9px] text-neutral-500 font-bold uppercase">
-                  <span>Cosine Similarity</span>
-                  <span className={bioStats.drift < 0.92 ? 'text-red-400 font-mono' : 'text-emerald-400 font-mono'}>
-                    {bioStats.drift}
-                  </span>
-                </div>
-                <div className="w-full h-1.5 bg-neutral-950 rounded-full mt-1.5 overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full transition-all duration-300 ${bioStats.drift < 0.92 ? 'bg-red-500' : 'bg-emerald-500'}`}
-                    style={{ width: `${bioStats.drift * 100}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[8px] text-neutral-600 font-mono mt-1">
-                  <span>Threshold: 0.92</span>
-                  <span>Max: 0.99</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Live Telemetry Features */}
-            <div className="bg-neutral-900 border border-white/[0.04] p-4 rounded-xl space-y-3.5">
-              <h4 className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Live Preprocessed Features</h4>
-              
-              {/* Keyboard stats */}
-              <div className="space-y-2">
-                <p className="text-[9px] text-neutral-500 uppercase font-mono">Keyboard Rhythm</p>
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                  <div className="bg-neutral-950 p-2 rounded border border-white/[0.02]">
-                    <div className="text-[8px] text-neutral-500">LAST KEY</div>
-                    <div className="text-white font-bold">{bioStats.lastKey}</div>
-                  </div>
-                  <div className="bg-neutral-950 p-2 rounded border border-white/[0.02]">
-                    <div className="text-[8px] text-neutral-500">SPEED (WPM)</div>
-                    <div className="text-white font-bold">{bioStats.wpm}</div>
-                  </div>
-                  <div className="bg-neutral-950 p-2 rounded border border-white/[0.02]">
-                    <div className="text-[8px] text-neutral-500">DWELL TIME</div>
-                    <div className="text-white font-bold">{bioStats.lastDwell ? `${bioStats.lastDwell}ms` : '0ms'}</div>
-                  </div>
-                  <div className="bg-neutral-950 p-2 rounded border border-white/[0.02]">
-                    <div className="text-[8px] text-neutral-500">FLIGHT TIME</div>
-                    <div className="text-white font-bold">{bioStats.lastFlight ? `${bioStats.lastFlight}ms` : '0ms'}</div>
-                  </div>
-                </div>
-                <div className="flex justify-between text-[8px] text-neutral-500 font-mono">
-                  <span>Backspace Rate:</span>
-                  <span className="text-white">{bioStats.errorRate}%</span>
-                </div>
-              </div>
-
-              {/* Mouse stats */}
-              <div className="space-y-2 pt-2 border-t border-white/[0.04]">
-                <p className="text-[9px] text-neutral-500 uppercase font-mono">Mouse Kinematics</p>
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                  <div className="bg-neutral-950 p-2 rounded border border-white/[0.02]">
-                    <div className="text-[8px] text-neutral-500">COORDS</div>
-                    <div className="text-white font-bold truncate">{bioStats.lastX}, {bioStats.lastY}</div>
-                  </div>
-                  <div className="bg-neutral-950 p-2 rounded border border-white/[0.02]">
-                    <div className="text-[8px] text-neutral-500">VELOCITY</div>
-                    <div className="text-white font-bold">{bioStats.lastVelocity} px/ms</div>
-                  </div>
-                </div>
-                <div className="flex justify-between text-[8px] text-neutral-500 font-mono">
-                  <span>Est. Acceleration:</span>
-                  <span className="text-white font-bold">{bioStats.lastAcceleration} px/ms²</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Zero-Trust Cryptographic Enforcement */}
-            <div className="bg-neutral-900 border border-white/[0.04] p-4 rounded-xl space-y-3">
-              <h4 className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Policy Enforcement</h4>
-              
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Containment Tier:</span>
-                  <span className={`font-bold ${cryptoState.riskLevel >= 4 ? 'text-red-400' : cryptoState.riskLevel === 3 ? 'text-orange-400' : cryptoState.riskLevel === 2 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                    Level {cryptoState.riskLevel}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Key Version:</span>
-                  <span className="font-mono text-teal-400 font-bold">v{cryptoState.keyVersion}</span>
-                </div>
-                <div className="pt-2 border-t border-white/[0.04] text-[10px] text-neutral-500 leading-relaxed font-mono truncate">
-                  Key: {cryptoState.aesKey.slice(0, 16)}...
-                </div>
-              </div>
-            </div>
-          </aside>
-        )}
       </div>
 
       {/* Simulated SMS Notification Popup (To display step-up verification codes) */}
@@ -2283,167 +1977,80 @@ export default function App() {
         </div>
       )}
 
-      {/* Step-up Authentication (OTP) Modal */}
+      {/* Security verification OTP modal */}
       {showOtpModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-          <div className="max-w-md w-full bg-neutral-900 border border-white/[0.08] rounded-xl p-6 shadow-2xl space-y-5 relative">
-            <div className="flex items-center space-x-3 text-amber-400">
-              <Shield size={22} />
-              <h3 className="text-base font-bold text-white tracking-wide">Step-up Authentication Required</h3>
+          <div className="max-w-md w-full bg-neutral-900 border border-white/[0.08] rounded-xl p-6 shadow-2xl space-y-5">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/20 grid place-items-center">
+                <Shield size={18} className="text-amber-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Security Verification</h3>
+                <p className="text-xs text-neutral-500">We need to confirm it's you</p>
+              </div>
             </div>
-            
-            <p className="text-xs text-neutral-400 leading-relaxed">
-              Moderate transaction risk has been signaled. To complete this transfer, please input the 6-digit confirmation code dispatched to your registered phone.
+            <p className="text-sm text-neutral-400 leading-relaxed">
+              To complete this transfer, please enter the 6-digit code sent to your registered mobile number.
             </p>
-
             {otpError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400">
-                {otpError}
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400 flex items-center gap-2">
+                <AlertTriangle size={14} className="shrink-0" /> Incorrect code. Please try again.
               </div>
             )}
-
             <form onSubmit={handleOtpVerify} className="space-y-4">
-              <input 
-                type="text" 
-                maxLength={6}
-                placeholder="000000"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value)}
-                className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg py-3 text-center text-lg font-bold font-mono text-white tracking-[0.4em] focus:outline-none focus:border-teal-500/50"
-              />
-
-              <button 
-                type="submit"
-                disabled={otpCode.length < 6}
-                className="w-full py-2.5 bg-teal-500 hover:bg-teal-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-xs rounded-lg transition-colors"
-              >
-                Verify Cryptographic Code
+              <input type="text" maxLength={6} placeholder="000000" value={otpCode}
+                onChange={e => setOtpCode(e.target.value)}
+                className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg py-3 text-center text-lg font-bold font-mono text-white tracking-[0.4em] focus:outline-none focus:border-teal-500/50" />
+              <button type="submit" disabled={otpCode.length < 6}
+                className="w-full py-2.5 bg-teal-500 hover:bg-teal-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-sm rounded-lg transition-colors">
+                Verify
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* Cryptographic Details Inspector Modal */}
-      {showCryptoModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-          <div className="max-w-lg w-full bg-neutral-900 border border-white/[0.08] rounded-xl p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
-              <div className="flex items-center space-x-2 text-teal-400">
-                <Key size={18} />
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Cryptographic Parameters</h3>
-              </div>
-              <button 
-                onClick={() => setShowCryptoModal(false)}
-                className="text-xs text-neutral-500 hover:text-white"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="space-y-4 text-xs">
-              <div className="grid grid-cols-3 gap-2 py-1.5 border-b border-white/[0.04]">
-                <span className="text-neutral-500">Session ID:</span>
-                <span className="col-span-2 font-mono text-neutral-300 break-all">{cryptoState.sessionId}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 py-1.5 border-b border-white/[0.04]">
-                <span className="text-neutral-500">Active Cipher:</span>
-                <span className="col-span-2 font-mono font-bold text-teal-400">AES-256-GCM (Galois/Counter Mode)</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 py-1.5 border-b border-white/[0.04]">
-                <span className="text-neutral-500">Key Version:</span>
-                <span className="col-span-2 font-mono text-neutral-300">Version {cryptoState.keyVersion} (Active)</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 py-1.5 border-b border-white/[0.04]">
-                <span className="text-neutral-500">Active Symmetric Key:</span>
-                <span className="col-span-2 font-mono text-neutral-400 select-all break-all">{formatKey(cryptoState.aesKey)}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 py-1.5 border-b border-white/[0.04]">
-                <span className="text-neutral-500">Session JWT Token:</span>
-                <span className="col-span-2 font-mono text-[10px] text-neutral-500 break-all truncate">Signed (HS256, HTTP-Only Cookie)</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 py-1.5">
-                <span className="text-neutral-500">Key Shuffling Rule:</span>
-                <span className="col-span-2 text-neutral-400 leading-relaxed">
-                  Upon risk escalation (L1 → L2, L2 → L3), the backend shuffles the active session key, invalidating past key versions and forcing local storage update. On L4, keys are purged.
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* High-priority Security Escalation Notifications Popup Stack (Requirement 1) */}
+      {/* Security status change notifications — plain language only */}
       <div className="fixed bottom-6 left-6 max-w-sm w-full space-y-3 z-50">
-        {escalationNotifications.map(notif => (
-          <div key={notif.id} className="bg-neutral-900 border-l-4 border-amber-500 border border-white/[0.08] rounded-r-lg p-4 shadow-2xl space-y-2.5 animate-bounce">
-            <div className="flex items-center justify-between border-b border-white/[0.04] pb-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-mono">
-                <ShieldAlert size={12} />
-                Security Escalation Signal
-              </span>
-              <button 
-                onClick={() => setEscalationNotifications(prev => prev.filter(n => n.id !== notif.id))}
-                className="text-neutral-500 hover:text-white text-xs font-bold font-mono"
-              >
-                ×
-              </button>
+        {escalationNotifications.map(notif => {
+          const borderColor = notif.toLevel>=3?'border-orange-500':notif.toLevel===2?'border-yellow-500':'border-emerald-500';
+          const iconColor = notif.toLevel>=3?'text-orange-400':notif.toLevel===2?'text-yellow-400':'text-emerald-400';
+          const title = notif.toLevel>=3?'Verification Required':notif.toLevel===2?'Unusual Activity Noticed':'Account Security Restored';
+          const body = notif.toLevel>=3?'Some transactions are temporarily restricted while we verify your identity.':notif.toLevel===2?"We detected a change in how this session is being used. We're keeping a close watch.":'Your session has returned to normal. All banking features are available.';
+          return (
+            <div key={notif.id} className={`bg-neutral-900 border-l-4 ${borderColor} border border-white/[0.08] rounded-r-xl p-4 shadow-2xl space-y-2`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Shield size={14} className={iconColor} />
+                  <span className={`text-xs font-bold ${iconColor}`}>{title}</span>
+                </div>
+                <button onClick={() => setEscalationNotifications(prev => prev.filter(n => n.id !== notif.id))}
+                  className="text-neutral-500 hover:text-white text-sm font-bold leading-none">×</button>
+              </div>
+              <p className="text-xs text-neutral-400 leading-relaxed">{body}</p>
+              <p className="text-[10px] text-neutral-600">{notif.timestamp} · AURA Security System</p>
             </div>
-
-            <div className="space-y-1.5 text-[11px] font-mono">
-              <div className="flex justify-between">
-                <span className="text-neutral-500 font-semibold">Threat Shift:</span>
-                <span className="text-white font-bold">LEVEL {notif.fromLevel} → LEVEL {notif.toLevel}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500 font-semibold">Crypto Tier:</span>
-                <span className="text-white font-bold uppercase">{notif.fromTier} → {notif.toTier}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500 font-semibold">Model Confidence:</span>
-                <span className="text-teal-400 font-bold">{notif.confidence}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500 font-semibold">Session ID:</span>
-                <span className="text-neutral-400">{notif.sessionId}</span>
-              </div>
-              <div className="text-[10px] text-neutral-300 bg-neutral-950 p-2 border border-white/[0.02] rounded leading-relaxed mt-1">
-                <strong>Attribution:</strong> {notif.reason}
-              </div>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Animated Cryptographic Transition Overlay (Requirement 3) */}
+      {/* Security level transition notice — brief toast */}
       {transitionOverlay && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-6 z-50 transition-all font-mono">
-          <div className="max-w-xl w-full text-center space-y-8 p-8 border border-white/[0.08] bg-neutral-950/60 rounded-2xl shadow-2xl relative overflow-hidden">
-            
-            {/* Spinning encryption icon */}
-            <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
-              <RefreshCw className="text-teal-400 absolute w-full h-full animate-spin duration-1000 opacity-60" size={80} />
-              <Key className="text-white" size={32} />
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-sm font-bold text-white tracking-wider uppercase">Cryptographic Re-Posturing System</h3>
-              <p className="text-[10px] text-neutral-500">DYNAMIC KEY SHUFFLE IN PROGRESS</p>
-            </div>
-
-            {/* Sequence terminal lines */}
-            <div className="text-left bg-black border border-white/[0.04] p-5 rounded-lg space-y-2 text-xs h-48 overflow-y-auto">
-              {transitionSteps.slice(0, currentStepIndex + 1).map((step, idx) => (
-                <div key={idx} className="flex items-start gap-2">
-                  <span className="text-teal-500 shrink-0 select-none">➜</span>
-                  <span className={idx === currentStepIndex ? "text-teal-400 font-bold animate-pulse" : "text-neutral-400"}>
-                    {step}
-                  </span>
-                </div>
-              ))}
-            </div>
-            
-            <div className="text-[9px] text-neutral-600">
-              AES-256-CTR key versions shuffling... local browser sessions syncing...
+        <div className="fixed bottom-24 right-6 z-50">
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border shadow-2xl ${
+            transitionOverlay.to > transitionOverlay.from
+              ? 'bg-neutral-900 border-amber-500/30 text-amber-300'
+              : 'bg-neutral-900 border-emerald-500/30 text-emerald-300'
+          }`}>
+            <Shield size={16} className={transitionOverlay.to > transitionOverlay.from ? 'text-amber-400' : 'text-emerald-400'} />
+            <div>
+              <div className="text-xs font-bold">{transitionOverlay.to > transitionOverlay.from ? 'Security level increased' : 'Security restored'}</div>
+              <div className="text-[10px] opacity-70">
+                {transitionOverlay.to > transitionOverlay.from
+                  ? (transitionOverlay.to >= 3 ? 'Some transactions now require verification' : 'Monitoring unusual activity')
+                  : 'All features restored'}
+              </div>
             </div>
           </div>
         </div>
