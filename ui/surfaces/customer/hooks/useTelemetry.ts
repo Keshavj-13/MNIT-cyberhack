@@ -174,8 +174,12 @@ export const useTelemetry = (
       const events = [...buffer.current];
 
       try {
-        await sendTelemetry(activeSid, activeKv, activeKey, events);
+        const result = await sendTelemetry(activeSid, activeKv, activeKey, events);
+        if (result === null) {
+          throw new Error("sendTelemetry returned null");
+        }
         buffer.current = buffer.current.slice(events.length);
+        console.log(`[Telemetry] Successfully flushed ${events.length} events.`);
       } catch (err) {
         console.warn('[Telemetry] Flush failed, keeping events in buffer', err);
       } finally {
