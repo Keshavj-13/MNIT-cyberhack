@@ -9,7 +9,7 @@ export default defineConfig({
     port: 3001,
     proxy: {
       '/customer': {
-        target: 'http://localhost:8001',
+        target: 'http://127.0.0.1:8001',
         changeOrigin: true,
         secure: false
       }

@@ -9,17 +9,17 @@ export default defineConfig({
     port: 3004,
     proxy: {
       '/model-reports': {
-        target: 'http://localhost:8004',
+        target: 'http://127.0.0.1:8004',
         changeOrigin: true,
         secure: false
       },
       '/verification-reports': {
-        target: 'http://localhost:8004',
+        target: 'http://127.0.0.1:8004',
         changeOrigin: true,
         secure: false
       },
       '/showcase': {
-        target: 'http://localhost:8004',
+        target: 'http://127.0.0.1:8004',
         changeOrigin: true,
         secure: false
       }
