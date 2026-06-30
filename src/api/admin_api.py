@@ -6,7 +6,7 @@ from typing import Dict, Any, List, Optional
 import uvicorn
 import secrets
 
-from src.db.models import SessionLocal, init_db, SecurityEvent, AriaInvestigation, CustomerSession
+from src.db.models import SessionLocal, init_db, SecurityEvent, AriaInvestigation, CustomerSession, TelemetryData
 from src.engine.registry import ProviderRegistry
 from src.api.internal.session_crypto import verify_jwt_token, create_jwt_token, revoke_token
 from src.explainability.explain import contributions_for_provider, make_chart, auto_summary
@@ -80,8 +80,6 @@ def admin_me(admin = Depends(get_current_admin)):
 @app.get("/admin/events", response_model=List[Dict[str, Any]])
 def list_events(limit: int = 50, user_id: Optional[str] = None, db: Session = Depends(get_db), admin = Depends(get_current_admin)):
     query = db.query(SecurityEvent)
-    # Hide simulation events from the core admin dashboard by default to avoid clutter
-    query = query.filter(~SecurityEvent.user_id.like("sim_%"))
     if user_id:
         query = query.filter(SecurityEvent.user_id == user_id)
         
@@ -104,8 +102,7 @@ def list_events(limit: int = 50, user_id: Optional[str] = None, db: Session = De
 @app.get("/admin/sessions", response_model=List[Dict[str, Any]])
 def list_sessions(db: Session = Depends(get_db), admin = Depends(get_current_admin)):
     """List all active customer sessions with their key rotation states and escalation risk levels."""
-    # Hide simulation sessions to avoid cluttering the admin monitoring feed
-    sessions = db.query(CustomerSession).filter(~CustomerSession.user_id.like("sim_%")).order_by(CustomerSession.updated_at.desc()).all()
+    sessions = db.query(CustomerSession).order_by(CustomerSession.updated_at.desc()).all()
     return [
         {
             "session_id": s.session_id,
@@ -119,6 +116,64 @@ def list_sessions(db: Session = Depends(get_db), admin = Depends(get_current_adm
         }
         for s in sessions
     ]
+
+@app.get("/admin/sessions/{session_id}/live")
+def get_session_live(session_id: str, db: Session = Depends(get_db), admin = Depends(get_current_admin)):
+    """Return live state for a selected session: recent telemetry, latest provider scores, features, risk."""
+    sess = db.query(CustomerSession).filter(CustomerSession.session_id == session_id).first()
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    # Last 20 telemetry events
+    telemetry_rows = db.query(TelemetryData).filter(
+        TelemetryData.session_id == session_id
+    ).order_by(TelemetryData.id.desc()).limit(20).all()
+    telemetry = [{"id": t.id, "type": t.type, "data": t.data,
+                  "timestamp": t.timestamp.isoformat() if t.timestamp else None}
+                 for t in reversed(telemetry_rows)]
+
+    # Latest security event
+    latest_event = db.query(SecurityEvent).filter(
+        SecurityEvent.session_id == session_id
+    ).order_by(SecurityEvent.id.desc()).first()
+
+    # Extract live features from telemetry
+    from src.engine.features import FeatureExtractor
+    import datetime
+    events_list = []
+    for t in telemetry_rows:
+        ts_val = t.id
+        if t.timestamp:
+            try:
+                ts_val = int(t.timestamp.replace(tzinfo=datetime.timezone.utc).timestamp() * 1000)
+            except Exception:
+                pass
+        events_list.append({"type": t.type, "data": t.data, "timestamp": ts_val})
+    features = FeatureExtractor().extract_features(events_list)
+
+    return {
+        "session": {
+            "session_id": sess.session_id,
+            "user_id": sess.user_id,
+            "risk_level": sess.risk_level,
+            "key_version": sess.key_version,
+            "is_active": sess.is_active,
+            "updated_at": sess.updated_at.isoformat() if sess.updated_at else None,
+        },
+        "telemetry": telemetry,
+        "telemetry_count": len(telemetry),
+        "features": features,
+        "latest_event": {
+            "id": latest_event.id,
+            "overall_risk": latest_event.overall_risk,
+            "decision": latest_event.decision,
+            "escalation_level": latest_event.escalation_level,
+            "confidence": latest_event.confidence,
+            "breakdown": latest_event.breakdown,
+            "why_decision": latest_event.why_decision,
+            "timestamp": latest_event.timestamp.isoformat() if latest_event.timestamp else None,
+        } if latest_event else None,
+    }
 
 @app.get("/admin/config")
 def get_config(admin = Depends(get_current_admin)):
@@ -274,10 +329,69 @@ def get_event_detail(event_id: int, db: Session = Depends(get_db), admin = Depen
         "visuals": visuals
     }
 
+@app.get("/admin/sessions/{session_id}/timeline")
+def get_session_timeline(session_id: str, db: Session = Depends(get_db), admin = Depends(get_current_admin)):
+    """Chronological event timeline for a single session — used by the admin Watch panel."""
+    events = db.query(SecurityEvent).filter(
+        SecurityEvent.session_id == session_id
+    ).order_by(SecurityEvent.timestamp.asc()).all()
+
+    def _action_context(payload: dict) -> str:
+        if not payload:
+            return ""
+        action = payload.get("action", "")
+        if action == "transfer":
+            amt = payload.get("amount")
+            new_bene = payload.get("is_new_beneficiary", False)
+            parts = [f"₹{amt:,.0f}" if amt else "transfer"]
+            if new_bene:
+                parts.append("new recipient")
+            return ", ".join(parts)
+        if action == "add_beneficiary":
+            name = payload.get("beneficiary_name", "")
+            return f"add '{name}'" if name else "add beneficiary"
+        if action == "heartbeat":
+            return "telemetry heartbeat"
+        return action
+
+    return [{
+        "id": e.id,
+        "timestamp": e.timestamp.isoformat(),
+        "relative_ms": None,  # computed client-side from first event
+        "event_category": e.event_category,
+        "overall_risk": e.overall_risk,
+        "decision": e.decision,
+        "escalation_level": e.escalation_level,
+        "why_decision": e.why_decision,
+        "action_context": _action_context(e.input_payload or {}),
+        "top_provider": max(
+            ((k, v.get("risk_score", 0)) for k, v in (e.breakdown or {}).items()),
+            key=lambda x: x[1], default=("", 0)
+        )[0].replace("RiskProvider", "").replace("BehavioralProvider", "").replace("Provider", ""),
+        "top_provider_score": max(
+            (v.get("risk_score", 0) for v in (e.breakdown or {}).values()),
+            default=0.0
+        ),
+    } for e in events]
+
+
 @app.get("/admin/timeline")
 def admin_timeline(limit: int = 30, db: Session = Depends(get_db), admin = Depends(get_current_admin)):
     # The complete chronological timeline feed including simulation events for audit tracking
     events = db.query(SecurityEvent).order_by(SecurityEvent.timestamp.desc(), SecurityEvent.id.desc()).limit(limit).all()
+
+    def _ctx(payload: dict) -> str:
+        if not payload:
+            return ""
+        action = payload.get("action", "")
+        if action == "transfer":
+            amt = payload.get("amount")
+            return f"₹{amt:,.0f} transfer" if amt else "transfer"
+        if action == "add_beneficiary":
+            name = payload.get("beneficiary_name", "")
+            return f"add '{name}'" if name else "add beneficiary"
+        return action
+
     return [{
         "id": e.id,
         "user_id": e.user_id,
@@ -287,7 +401,8 @@ def admin_timeline(limit: int = 30, db: Session = Depends(get_db), admin = Depen
         "decision": e.decision,
         "level": e.escalation_level,
         "event_category": e.event_category,
-        "why_decision": e.why_decision
+        "why_decision": e.why_decision,
+        "action_context": _ctx(e.input_payload or {}),
     } for e in events]
 
 @app.get("/admin/alerts")
@@ -348,6 +463,30 @@ def explain_event(event_id: int, admin=Depends(get_current_admin), db: Session =
             "summary": auto_summary(contribs, score),
         }
     return result
+
+
+@app.post("/admin/events/{event_id}/analyze")
+def analyze_event(event_id: int, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    event = db.query(SecurityEvent).filter(SecurityEvent.id == event_id).first()
+    if not event: raise HTTPException(404, "Event not found")
+    
+    from src.explainability.explain import make_grid_chart
+    charts = {}
+    for p in _registry.get_providers():
+        name = p.__class__.__name__
+        contribs = contributions_for_provider(p, event.input_payload or {})
+        if contribs:
+            score = (event.breakdown or {}).get(name, {}).get("risk_score", event.overall_risk)
+            charts[name] = make_chart(contribs, name, score, event.decision)
+            
+    grid = make_grid_chart(charts, f"On-Demand: event#{event.id} user={event.user_id}") if charts else ""
+    
+    from src.agents.aria import _vlm_call
+    hypothesis = f"On-demand analysis requested for event {event.id} ({event.event_category})"
+    event_summary = f"event#{event.id} risk={event.overall_risk:.2f} cat={event.event_category}"
+    
+    vlm_text = _vlm_call(grid, hypothesis, event_summary, [event]) if grid else "No provider telemetry charts available to analyze."
+    return {"assessment": vlm_text}
 
 
 # ── ARIA investigations ───────────────────────────────────────────────────────

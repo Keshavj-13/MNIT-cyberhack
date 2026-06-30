@@ -58,7 +58,10 @@ export const useTelemetry = (
       let flightTime = 0;
       if (lastKeyTimestamp.current) {
         flightTime = now - lastKeyTimestamp.current;
-        pushEvent('keystroke', { event: 'flight', flightTime, key: e.key, code: e.code });
+        const isPassword = (document.activeElement as HTMLInputElement)?.type === 'password';
+        const keyVal = e.key === 'Backspace' ? 'Backspace' : (isPassword ? '*' : e.key);
+        const codeVal = isPassword ? 'KeyX' : e.code;
+        pushEvent('keystroke', { event: 'flight', flightTime, key: keyVal, code: codeVal });
       }
 
       if (onStatsUpdate) {
@@ -66,9 +69,10 @@ export const useTelemetry = (
         if (keystrokeTimes.current.length > 20) keystrokeTimes.current.shift();
         const duration = (now - keystrokeTimes.current[0]) / 60000;
         const wpm = duration > 0 ? Math.round((keystrokeTimes.current.length / 5) / duration) : 0;
+        const isPassword = (document.activeElement as HTMLInputElement)?.type === 'password';
         onStatsUpdate({
           type: 'keystroke',
-          lastKey: e.key,
+          lastKey: isPassword ? '*' : e.key,
           lastFlight: flightTime,
           wpm,
           errorRate: totalKeys.current > 0 ? Math.round((backspaceCount.current / totalKeys.current) * 100) : 0
@@ -82,7 +86,10 @@ export const useTelemetry = (
       const dwellStart = keysDown.current.get(e.code);
       if (dwellStart) {
         const dwellTime = now - dwellStart;
-        pushEvent('keystroke', { event: 'dwell', dwellTime, key: e.key, code: e.code });
+        const isPassword = (document.activeElement as HTMLInputElement)?.type === 'password';
+        const keyVal = e.key === 'Backspace' ? 'Backspace' : (isPassword ? '*' : e.key);
+        const codeVal = isPassword ? 'KeyX' : e.code;
+        pushEvent('keystroke', { event: 'dwell', dwellTime, key: keyVal, code: codeVal });
         keysDown.current.delete(e.code);
 
         if (onStatsUpdate) {
@@ -140,12 +147,32 @@ export const useTelemetry = (
     const resetIdle = () => {
       clearTimeout(idleTimeout);
       idleTimeout = setTimeout(() => {
-        pushEvent('session', { event: 'idle', duration: 60000 });
-      }, 60000); // 1 minute idle
+        pushEvent('session', { event: 'idle', duration: 10000 });
+      }, 10000); // 10s idle — BEACON imi_mean uses 100ms gaps, but we use 10s for coarse session signals
     };
 
     const handleVisibilityChange = () => {
       pushEvent('session', { event: 'visibility', state: document.visibilityState });
+    };
+
+    // Focus/blur: catches alt-tab, which visibilitychange misses on some browsers
+    const handleBlur = () => pushEvent('session', { event: 'focus_change', state: 'blur' });
+    const handleFocus = () => pushEvent('session', { event: 'focus_change', state: 'focus' });
+
+    // Paste: strong fraud signal — attacker pastes stolen credentials/amounts
+    const handlePaste = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData('text') ?? '';
+      pushEvent('session', { event: 'paste', length: text.length, hasDigits: /\d/.test(text) });
+    };
+
+    // Scroll: contributes to interaction_density in features.py
+    let lastScrollTime = 0;
+    const handleScroll = () => {
+      const now = Date.now();
+      if (now - lastScrollTime > 200) { // 200ms throttle
+        pushEvent('session', { event: 'scroll', t: now });
+        lastScrollTime = now;
+      }
     };
 
     pushEvent('session', { event: 'page_load', url: window.location.href });
@@ -156,7 +183,11 @@ export const useTelemetry = (
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('click', handleClick);
     window.addEventListener('visibilitychange', handleVisibilityChange);
-    
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('paste', handlePaste as EventListener);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
     // Reset idle on activity
     window.addEventListener('keydown', resetIdle);
     window.addEventListener('mousemove', resetIdle);
@@ -187,7 +218,7 @@ export const useTelemetry = (
       }
     };
 
-    const interval = setInterval(flushBuffer, 8000); // 8 seconds batch
+    const interval = setInterval(flushBuffer, 3000); // 3 seconds batch
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
@@ -195,6 +226,10 @@ export const useTelemetry = (
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('click', handleClick);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('paste', handlePaste as EventListener);
+      window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('keydown', resetIdle);
       window.removeEventListener('mousemove', resetIdle);
       window.removeEventListener('click', resetIdle);

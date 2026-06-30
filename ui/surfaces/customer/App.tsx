@@ -6,7 +6,7 @@ import {
 import { 
   loginCustomer, logoutCustomer, getAccountDetails, 
   getStatements, getBeneficiaries, addBeneficiary, transferMoney,
-  registerCustomer, sendOTP, verifyOTP, getMe
+  registerCustomer, sendOTP, verifyOTP, getMe, getRecoveryCard
 } from './api';
 import { useTelemetry } from './hooks/useTelemetry';
 import { usePreferences } from './Preferences';
@@ -75,6 +75,7 @@ export default function App() {
     } else if (!isAuthenticated) {
       sessionStorage.removeItem('cbi_crypto_state');
       sessionStorage.removeItem('cbi_username');
+      sessionStorage.removeItem('cbi_auth_token');
     }
   }, [cryptoState, isAuthenticated, username]);
 
@@ -159,7 +160,10 @@ export default function App() {
   const [resendCooldown, setResendCooldown] = useState(0);
 
   // Active session timer
-  const [sessionTtl, setSessionTtl] = useState(1800); // 30 minutes countdown
+  const [sessionTtl, setSessionTtl] = useState(600); // 10 minutes countdown
+
+  // Recovery card image source state
+  const [cardImageSrc, setCardImageSrc] = useState<string | null>(null);
 
   // Active telemetry stats and HUD toggles
   const [showBioHud, setShowBioHud] = useState(false);
@@ -277,7 +281,7 @@ export default function App() {
     }
   }, [currentStepIndex, transitionSteps]);
 
-  // Decrement session timer
+  // Decrement session timer with activity reset
   useEffect(() => {
     if (!isAuthenticated) return;
     const interval = setInterval(() => {
@@ -289,7 +293,20 @@ export default function App() {
         return prev - 1;
       });
     }, 1000);
-    return () => clearInterval(interval);
+
+    const resetTimer = () => {
+      setSessionTtl(600); // Reset to 10 minutes on user activity
+    };
+    window.addEventListener('mousemove', resetTimer);
+    window.addEventListener('keydown', resetTimer);
+    window.addEventListener('click', resetTimer);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('mousemove', resetTimer);
+      window.removeEventListener('keydown', resetTimer);
+      window.removeEventListener('click', resetTimer);
+    };
   }, [isAuthenticated]);
 
   // Fetch account data
@@ -312,7 +329,12 @@ export default function App() {
           // Cryptographic desync detected (key was shuffled by server in background)
           triggerKeyDesyncError();
         } else if (err.response?.status === 401) {
-          setIsAuthenticated(false);
+          const detail = err.response?.data?.detail || '';
+          if (detail.includes("Containment triggered") || detail.includes("locked out")) {
+            setCryptoState(prev => ({ ...prev, riskLevel: 4 }));
+          } else {
+            setIsAuthenticated(false);
+          }
         }
       }
     }
@@ -334,13 +356,14 @@ export default function App() {
     setAuthError('');
     try {
       const data = await loginCustomer(username, password);
+      sessionStorage.setItem('cbi_auth_token', data.token);
       setCryptoState({
         aesKey: data.aes_key,
         keyVersion: data.key_version,
         sessionId: data.session_id,
         riskLevel: data.risk_level
       });
-      setSessionTtl(1800);
+      setSessionTtl(600);
       setIsAuthenticated(true);
     } catch (err: any) {
       setAuthError(err.response?.data?.detail || 'Authentication failed. Please verify credentials.');
@@ -354,6 +377,7 @@ export default function App() {
       await logoutCustomer();
     } catch (e) {}
     setIsAuthenticated(false);
+    sessionStorage.removeItem('cbi_auth_token');
     setCryptoState({ aesKey: '', keyVersion: 1, sessionId: '', riskLevel: 1 });
     setUsername('');
     setPassword('');
@@ -643,7 +667,7 @@ export default function App() {
           </div>
           <p className="text-sm text-gray-400">Please sign in again to continue banking.</p>
           <button onClick={handleLogout}
-            className="w-full py-3 rounded-xl font-semibold text-sm text-white transition-all"
+            className="w-full py-3 rounded-xl font-semibold text-sm text-slate-900 transition-all"
             style={{ background: 'linear-gradient(135deg, #003893, #0052cc)' }}>
             Sign In Again
           </button>
@@ -1534,22 +1558,22 @@ export default function App() {
 
   // Security status from backend risk level only
   const secStatus = (() => {
-    if (cryptoState.riskLevel >= 3) return { dot: 'bg-orange-400', text: 'text-orange-300', border: 'border-orange-500/30', bg: 'bg-orange-500/10', label: 'Verification Required', pulse: true };
-    if (cryptoState.riskLevel === 2) return { dot: 'bg-yellow-400',  text: 'text-yellow-300',  border: 'border-yellow-500/30',  bg: 'bg-yellow-500/10',  label: 'Monitoring',             pulse: true };
-    return { dot: 'bg-emerald-400', text: 'text-emerald-300', border: 'border-emerald-500/30', bg: 'bg-emerald-500/10', label: 'Protected', pulse: false };
+    if (cryptoState.riskLevel >= 3) return { dot: 'bg-orange-500', text: 'text-orange-700', border: 'border-orange-200', bg: 'bg-orange-50', label: 'Verification Required', pulse: true };
+    if (cryptoState.riskLevel === 2) return { dot: 'bg-amber-500',  text: 'text-amber-700',  border: 'border-amber-200',  bg: 'bg-amber-50',  label: 'Monitoring',             pulse: true };
+    return { dot: 'bg-emerald-500', text: 'text-emerald-700', border: 'border-emerald-200', bg: 'bg-emerald-50', label: 'Protected', pulse: false };
   })();
 
   return (
-    <div className="flex h-screen bg-neutral-950 text-white font-sans flex-col">
+    <div className="flex h-screen bg-slate-50 text-slate-900 font-sans flex-col">
       {/* Header — banking branding + security status only */}
-      <header className="border-b border-white/[0.06] bg-neutral-950 px-6 py-3.5 flex items-center justify-between shrink-0">
+      <header className="border-b border-slate-200 bg-white px-6 py-3.5 flex items-center justify-between shrink-0">
         <div className="flex items-center space-x-3">
           <div className="w-9 h-9 rounded-lg grid place-items-center" style={{ background: 'linear-gradient(135deg, #003893, #001f5c)' }}>
             <Landmark size={18} className="text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-sm leading-tight text-white">Central Bank of India</h1>
-            <p className="text-[10px] text-neutral-500 font-medium">Internet Banking · Welcome, <span className="text-neutral-300">{username}</span></p>
+            <h1 className="font-bold text-base leading-tight text-slate-900">Central Bank of India</h1>
+            <p className="text-sm text-slate-500 font-medium">Internet Banking · Welcome, <span className="text-slate-700 font-semibold">{username}</span></p>
           </div>
         </div>
         <div className="flex items-center space-x-3">
@@ -1558,8 +1582,8 @@ export default function App() {
             <span className={`w-2 h-2 rounded-full ${secStatus.dot} ${secStatus.pulse ? 'animate-pulse' : ''}`}></span>
             <span>{secStatus.label}</span>
           </div>
-          <div className="text-xs text-neutral-500">Session: <span className="text-neutral-300 font-mono">{formatTtl(sessionTtl)}</span></div>
-          <button onClick={handleLogout} className="p-2 text-neutral-500 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors" title="Sign Out">
+          <div className="text-xs text-slate-500">Session: <span className="text-slate-600 font-mono">{formatTtl(sessionTtl)}</span></div>
+          <button onClick={handleLogout} className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-colors" title="Sign Out">
             <LogOut size={16} />
           </button>
         </div>
@@ -1568,31 +1592,35 @@ export default function App() {
       {/* Main Container */}
       <div className="flex-1 flex overflow-hidden">
         {/* Navigation Sidebar */}
-        <aside className="w-60 border-r border-white/[0.06] bg-neutral-950 flex flex-col shrink-0 p-4 space-y-1">
+        <aside className="w-64 border-r border-slate-200 bg-white flex flex-col shrink-0 p-4 space-y-1">
           <button 
             onClick={() => setActiveTab('dashboard')}
-            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === 'dashboard' ? 'bg-teal-500/10 text-teal-300' : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
+            className={`w-full flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-colors ${
+              activeTab === 'dashboard' ? 'bg-teal-50 text-teal-700' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
             <LayoutDashboard size={18} />
             <span>Dashboard</span>
           </button>
           <button onClick={() => setActiveTab('transfer')}
-            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${activeTab==='transfer'?'bg-teal-500/10 text-teal-300':'text-neutral-400 hover:text-white hover:bg-white/[0.04]'}`}>
+            className={`w-full flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-colors ${activeTab==='transfer'?'bg-teal-50 text-teal-700':'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}>
             <Send size={18} /><span>Transfer Money</span>
           </button>
           <button onClick={() => setActiveTab('beneficiaries')}
-            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${activeTab==='beneficiaries'?'bg-teal-500/10 text-teal-300':'text-neutral-400 hover:text-white hover:bg-white/[0.04]'}`}>
+            className={`w-full flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-colors ${activeTab==='beneficiaries'?'bg-teal-50 text-teal-700':'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}>
             <Users size={18} /><span>Beneficiaries</span>
           </button>
           <button onClick={() => setActiveTab('statements')}
-            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${activeTab==='statements'?'bg-teal-500/10 text-teal-300':'text-neutral-400 hover:text-white hover:bg-white/[0.04]'}`}>
+            className={`w-full flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-colors ${activeTab==='statements'?'bg-teal-50 text-teal-700':'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}>
             <FileText size={18} /><span>Statements</span>
           </button>
           <button onClick={() => setActiveTab('support')}
-            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${activeTab==='support'?'bg-teal-500/10 text-teal-300':'text-neutral-400 hover:text-white hover:bg-white/[0.04]'}`}>
+            className={`w-full flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-colors ${activeTab==='support'?'bg-teal-50 text-teal-700':'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}>
             <HelpCircle size={18} /><span>Help & Support</span>
+          </button>
+          <button onClick={() => setActiveTab('security')}
+            className={`w-full flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-colors ${activeTab==='security'?'bg-teal-50 text-teal-700':'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}>
+            <Shield size={18} /><span>Security Card</span>
           </button>
 
           <div className="flex-1"></div>
@@ -1605,14 +1633,14 @@ export default function App() {
         </aside>
 
         {/* Content Panel */}
-        <main className="flex-1 overflow-y-auto p-8 bg-neutral-950">
+        <main className="flex-1 overflow-y-auto p-8 bg-slate-50">
           
           {/* Dashboard Tab */}
           {activeTab === 'dashboard' && (
             <div className="max-w-4xl mx-auto space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
-                <h2 className="text-xl font-bold tracking-tight">Account Summary</h2>
-                <span className="text-xs text-neutral-500">{new Date().toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' })}</span>
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                <h2 className="text-2xl font-bold tracking-tight">Account Summary</h2>
+                <span className="text-xs text-slate-500">{new Date().toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' })}</span>
               </div>
 
               {/* Balances — skeleton while loading to avoid $0.00 flash */}
@@ -1621,18 +1649,18 @@ export default function App() {
                   { label: 'Current Account', key: 'checking' },
                   { label: 'Savings Account', key: 'savings' },
                 ].map(({ label, key }) => (
-                  <div key={key} className="bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/[0.06] rounded-xl p-6 relative overflow-hidden">
+                  <div key={key} className="bg-gradient-to-br from-white to-slate-100 border border-slate-200 rounded-xl p-6 relative overflow-hidden">
                     {key === 'checking' && <div className="absolute top-0 right-0 p-4 opacity-5"><Landmark size={120} /></div>}
-                    <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">{label}</p>
+                    <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{label}</p>
                     {balances === null ? (
                       <>
-                        <div className="mt-2 h-3 w-32 bg-neutral-800 rounded animate-pulse"></div>
-                        <div className="mt-4 h-8 w-48 bg-neutral-800 rounded animate-pulse"></div>
+                        <div className="mt-2 h-3 w-32 bg-slate-100 rounded animate-pulse"></div>
+                        <div className="mt-4 h-8 w-48 bg-slate-100 rounded animate-pulse"></div>
                       </>
                     ) : (
                       <>
-                        <p className="text-xs font-mono text-neutral-500 mt-1">{balances?.[key]?.account_number || 'CBI-XXXXXXXXX'}</p>
-                        <p className="text-3xl font-bold mt-4 tracking-tight">
+                        <p className="text-xs font-mono text-slate-500 mt-1">{balances?.[key]?.account_number || 'CBI-XXXXXXXXX'}</p>
+                        <p className="text-4xl font-bold mt-3 tracking-tight">
                           ₹{(balances?.[key]?.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </p>
                       </>
@@ -1644,7 +1672,7 @@ export default function App() {
               {/* Cryptographic Authority & Performance tradeoff card */}
               {/* Security Status — consequence only, no mechanism */}
               <div className={`rounded-xl border p-5 transition-all duration-700 flex items-center gap-4 ${
-                cryptoState.riskLevel>=3?'border-orange-500/30 bg-orange-500/[0.05]':cryptoState.riskLevel===2?'border-yellow-500/25 bg-yellow-500/[0.05]':'border-emerald-500/20 bg-emerald-500/[0.04]'
+                cryptoState.riskLevel>=3?'border-orange-200 bg-orange-50':cryptoState.riskLevel===2?'border-amber-200 bg-amber-50':'border-emerald-200 bg-emerald-50'
               }`}>
                 <div className={`w-11 h-11 rounded-full grid place-items-center shrink-0 border ${secStatus.bg} ${secStatus.border}`}>
                   <Shield size={20} className={secStatus.text} />
@@ -1653,7 +1681,7 @@ export default function App() {
                   <div className={`text-sm font-bold ${secStatus.text}`}>
                     {cryptoState.riskLevel===1?'Your account is protected':cryptoState.riskLevel===2?'Monitoring unusual activity':cryptoState.riskLevel===3?'Additional verification required':'Session secured'}
                   </div>
-                  <div className="text-xs text-neutral-400 mt-1 leading-relaxed">
+                  <div className="text-xs text-slate-500 mt-1 leading-relaxed">
                     {cryptoState.riskLevel===1&&'Everything looks normal. Your funds and account are fully secure.'}
                     {cryptoState.riskLevel===2&&"We noticed something that differs from your usual banking activity. We're keeping a close watch."}
                     {cryptoState.riskLevel>=3&&'Some sensitive transactions are temporarily restricted. A verification step may be required.'}
@@ -1663,26 +1691,26 @@ export default function App() {
               </div>
 
               {/* Recent Transactions */}
-              <div className="bg-neutral-900 border border-white/[0.06] rounded-xl p-6 space-y-4">
-                <h3 className="text-sm font-semibold tracking-wide text-white">Recent Transactions</h3>
-                <div className="divide-y divide-white/[0.06] overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+              <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+                <h3 className="text-base font-semibold tracking-wide text-slate-900">Recent Transactions</h3>
+                <div className="divide-y divide-slate-200 overflow-x-auto">
+                  <table className="w-full text-left text-sm">
                     <thead>
-                      <tr className="text-neutral-500 border-b border-white/[0.06]">
+                      <tr className="text-slate-500 border-b border-slate-200">
                         <th className="pb-3 font-semibold uppercase">Date</th>
                         <th className="pb-3 font-semibold uppercase">Description</th>
                         <th className="pb-3 font-semibold uppercase text-right">Amount</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/[0.04] font-mono">
+                    <tbody className="divide-y divide-slate-100 font-mono">
                       {transactions.length === 0 && (
-                        <tr><td colSpan={3} className="py-6 text-center text-xs text-neutral-600">No recent transactions</td></tr>
+                        <tr><td colSpan={3} className="py-6 text-center text-xs text-slate-400">No recent transactions</td></tr>
                       )}
                       {transactions.map((tx: any) => (
-                        <tr key={tx.id} className="hover:bg-white/[0.01]">
-                          <td className="py-3 text-neutral-400">{new Date(tx.date).toLocaleDateString('en-IN')}</td>
-                          <td className="py-3 text-white font-sans">{tx.description}</td>
-                          <td className={`py-3 text-right font-bold ${tx.amount > 0 ? 'text-teal-400' : 'text-neutral-300'}`}>
+                        <tr key={tx.id} className="hover:bg-slate-50">
+                          <td className="py-3 text-slate-500">{new Date(tx.date).toLocaleDateString('en-IN')}</td>
+                          <td className="py-3 text-slate-900 font-sans">{tx.description}</td>
+                          <td className={`py-3 text-right font-bold ${tx.amount > 0 ? 'text-teal-700' : 'text-slate-600'}`}>
                             {tx.amount > 0 ? `+₹${tx.amount.toFixed(2)}` : `-₹${Math.abs(tx.amount).toFixed(2)}`}
                           </td>
                         </tr>
@@ -1697,25 +1725,25 @@ export default function App() {
           {/* Transfer Tab */}
           {activeTab === 'transfer' && (
             <div className="max-w-xl mx-auto space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
-                <h2 className="text-xl font-bold tracking-tight">Transfer Money</h2>
-                <span className="text-xs text-neutral-500">Secure transfer</span>
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                <h2 className="text-2xl font-bold tracking-tight">Transfer Money</h2>
+                <span className="text-xs text-slate-500">Secure transfer</span>
               </div>
 
               {transferStatus && (
-                <div className="p-4 bg-teal-500/10 border border-teal-500/25 rounded-lg flex items-center gap-3 text-sm text-teal-300">
+                <div className="p-4 bg-teal-50 border border-teal-300 rounded-lg flex items-center gap-3 text-sm text-teal-700">
                   <CheckCircle size={18} className="shrink-0" />
                   <span>{transferStatus.message}</span>
                 </div>
               )}
 
-              <form onSubmit={handleTransferSubmit} className="bg-neutral-900 border border-white/[0.06] rounded-xl p-6 space-y-4 shadow-xl">
+              <form onSubmit={handleTransferSubmit} className="bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-xl">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Select Payee</label>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Select Payee</label>
                   <select 
                     value={selectedBeneficiaryId}
                     onChange={(e) => setSelectedBeneficiaryId(e.target.value)}
-                    className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-teal-500/50"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-teal-400"
                   >
                     <option value="">-- Choose a Beneficiary --</option>
                     {beneficiaries.map((b: any) => (
@@ -1725,14 +1753,14 @@ export default function App() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Transfer Amount ($)</label>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Transfer Amount ($)</label>
                   <input 
                     type="number"
                     step="0.01"
                     placeholder="0.00"
                     value={transferAmount}
                     onChange={(e) => setTransferAmount(e.target.value)}
-                    className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-teal-500/50 font-mono"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-teal-400 font-mono"
                   />
                 </div>
 
@@ -1745,7 +1773,7 @@ export default function App() {
                 <button
                   type="submit"
                   disabled={isTransferring || !selectedBeneficiaryId || !transferAmount}
-                  className="w-full py-3 bg-teal-500 hover:bg-teal-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-100 disabled:text-slate-500 text-white font-bold text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
                   {isTransferring ? 'Processing transfer...' : 'Send Money'}
                 </button>
@@ -1756,81 +1784,81 @@ export default function App() {
           {/* Beneficiaries Tab */}
           {activeTab === 'beneficiaries' && (
             <div className="max-w-3xl mx-auto space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
-                <h2 className="text-xl font-bold tracking-tight">Beneficiaries</h2>
-                <span className="text-xs text-neutral-500">Manage who you can send money to</span>
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                <h2 className="text-2xl font-bold tracking-tight">Beneficiaries</h2>
+                <span className="text-xs text-slate-500">Manage who you can send money to</span>
               </div>
 
               {addPayeeStatus === 'added' && (
-                <div className="p-4 bg-teal-500/10 border border-teal-500/25 rounded-lg flex items-center gap-3 text-sm text-teal-300">
+                <div className="p-4 bg-teal-50 border border-teal-300 rounded-lg flex items-center gap-3 text-sm text-teal-700">
                   <CheckCircle size={18} /><span>Beneficiary added successfully.</span>
                 </div>
               )}
 
               {addPayeeStatus === 'verification_required' && (
-                <div className="p-4 bg-amber-500/10 border border-amber-500/25 rounded-lg flex items-center gap-3 text-sm text-amber-300">
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-3 text-sm text-amber-700">
                   <AlertTriangle size={18} /><span>We'll ask you to verify this payee the first time you send money to them.</span>
                 </div>
               )}
 
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
                 {/* Add Payee Form */}
-                <form onSubmit={handleAddPayee} className="lg:col-span-2 bg-neutral-900 border border-white/[0.06] rounded-xl p-6 space-y-4">
-                  <h3 className="text-sm font-semibold tracking-wide text-white">Add New Payee</h3>
+                <form onSubmit={handleAddPayee} className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+                  <h3 className="text-sm font-semibold tracking-wide text-slate-900">Add New Payee</h3>
                   
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Full Name</label>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Full Name</label>
                     <input 
                       type="text"
                       placeholder="e.g. Priyan Sharma"
                       value={newPayeeName}
                       onChange={(e) => setNewPayeeName(e.target.value)}
-                      className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-3.5 py-2 text-xs focus:outline-none focus:border-teal-500/50"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-xs focus:outline-none focus:border-teal-400"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Account Number (IBAN)</label>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Account Number (IBAN)</label>
                     <input 
                       type="text"
                       placeholder="e.g. TR-XXXXXXXXXXX"
                       value={newPayeeAccount}
                       onChange={(e) => setNewPayeeAccount(e.target.value)}
-                      className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-3.5 py-2 text-xs focus:outline-none focus:border-teal-500/50 font-mono"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-xs focus:outline-none focus:border-teal-400 font-mono"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Bank Name</label>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Bank Name</label>
                     <input 
                       type="text"
                       placeholder="e.g. Chase Bank"
                       value={newPayeeBank}
                       onChange={(e) => setNewPayeeBank(e.target.value)}
-                      className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-3.5 py-2 text-xs focus:outline-none focus:border-teal-500/50 font-sans"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-xs focus:outline-none focus:border-teal-400 font-sans"
                     />
                   </div>
 
                   <button 
                     type="submit"
                     disabled={isAddingPayee || !newPayeeName || !newPayeeAccount || !newPayeeBank}
-                    className="w-full py-2.5 bg-teal-500 hover:bg-teal-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-xs rounded-lg transition-colors"
+                    className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-100 disabled:text-slate-500 text-white font-bold text-xs rounded-lg transition-colors"
                   >
                     {isAddingPayee ? 'Registering Payee...' : 'Register Payee'}
                   </button>
                 </form>
 
                 {/* Payees List */}
-                <div className="lg:col-span-3 bg-neutral-900 border border-white/[0.06] rounded-xl p-6 space-y-4">
-                  <h3 className="text-sm font-semibold tracking-wide text-white">Registered Payee List</h3>
-                  <div className="divide-y divide-white/[0.06]">
+                <div className="lg:col-span-3 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+                  <h3 className="text-sm font-semibold tracking-wide text-slate-900">Registered Payee List</h3>
+                  <div className="divide-y divide-slate-200">
                     {beneficiaries.map((b: any) => (
                       <div key={b.id} className="py-3 flex items-center justify-between first:pt-0 last:pb-0">
                         <div className="space-y-0.5">
-                          <p className="text-xs font-semibold text-white">{b.name}</p>
-                          <p className="text-[10px] text-neutral-500 font-mono">{b.account}</p>
+                          <p className="text-xs font-semibold text-slate-900">{b.name}</p>
+                          <p className="text-xs text-slate-500 font-mono">{b.account}</p>
                         </div>
-                        <span className="text-[10px] bg-white/[0.04] text-neutral-400 border border-white/[0.06] px-2.5 py-1 rounded-full font-sans font-medium">
+                        <span className="text-xs bg-slate-50 text-slate-500 border border-slate-200 px-2.5 py-1 rounded-full font-sans font-medium">
                           {b.bank_name}
                         </span>
                       </div>
@@ -1844,31 +1872,31 @@ export default function App() {
           {/* Statements Tab */}
           {activeTab === 'statements' && (
             <div className="max-w-xl mx-auto space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
-                <h2 className="text-xl font-bold tracking-tight">Account Statements</h2>
-                <span className="text-xs text-neutral-500">Download or view your statements</span>
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                <h2 className="text-2xl font-bold tracking-tight">Account Statements</h2>
+                <span className="text-xs text-slate-500">Download or view your statements</span>
               </div>
 
-              <div className="bg-neutral-900 border border-white/[0.06] rounded-xl divide-y divide-white/[0.06] overflow-hidden">
+              <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-200 overflow-hidden">
                 {[
                   { month: "May 2026", date: "June 01, 2026", size: "2.4 MB" },
                   { month: "April 2026", date: "May 01, 2026", size: "2.3 MB" },
                   { month: "March 2026", date: "April 01, 2026", size: "2.5 MB" },
                   { month: "February 2026", date: "March 01, 2026", size: "2.1 MB" },
                 ].map((item, index) => (
-                  <div key={index} className="p-4 flex items-center justify-between hover:bg-white/[0.01] transition-colors">
+                  <div key={index} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
                     <div className="flex items-center space-x-3.5">
-                      <div className="w-8 h-8 rounded bg-teal-500/10 border border-teal-500/20 text-teal-400 grid place-items-center">
+                      <div className="w-8 h-8 rounded bg-teal-50 border border-teal-500/20 text-teal-700 grid place-items-center">
                         <FileText size={16} />
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-white">{item.month} statement.pdf</p>
-                        <p className="text-[10px] text-neutral-500 mt-0.5">Published {item.date}</p>
+                        <p className="text-xs font-bold text-slate-900">{item.month} statement.pdf</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Published {item.date}</p>
                       </div>
                     </div>
                     <button 
                       onClick={() => alert("Your statement is ready to download.")}
-                      className="text-[11px] text-teal-400 font-semibold hover:underline"
+                      className="text-xs text-teal-700 font-semibold hover:underline"
                     >
                       Download ({item.size})
                     </button>
@@ -1881,32 +1909,32 @@ export default function App() {
           {/* Support Tab */}
           {activeTab === 'support' && (
             <div className="max-w-3xl mx-auto space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
-                <h2 className="text-xl font-bold tracking-tight">Support Desk</h2>
-                <span className="text-xs text-neutral-500">Security & Help</span>
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                <h2 className="text-2xl font-bold tracking-tight">Support Desk</h2>
+                <span className="text-xs text-slate-500">Security & Help</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                 {/* FAQs */}
-                <div className="md:col-span-3 bg-neutral-900 border border-white/[0.06] rounded-xl p-6 space-y-4">
-                  <h3 className="text-sm font-semibold tracking-wide text-white">Security & Policy FAQ</h3>
+                <div className="md:col-span-3 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+                  <h3 className="text-sm font-semibold tracking-wide text-slate-900">Security & Policy FAQ</h3>
                   
                   <div className="space-y-4">
                     <div className="space-y-1.5">
-                      <h4 className="text-xs font-bold text-teal-400">Why did my security status change colour?</h4>
-                      <p className="text-[11px] text-neutral-400 leading-relaxed">
+                      <h4 className="text-xs font-bold text-teal-700">Why did my security status change colour?</h4>
+                      <p className="text-xs text-slate-500 leading-relaxed">
                         AURA continuously monitors how your session behaves. If something looks different from your usual pattern — such as typing speed or mouse movement — the indicator changes to let you know we're paying closer attention.
                       </p>
                     </div>
                     <div className="space-y-1.5">
-                      <h4 className="text-xs font-bold text-teal-400">Why was I asked to verify with a code?</h4>
-                      <p className="text-[11px] text-neutral-400 leading-relaxed">
+                      <h4 className="text-xs font-bold text-teal-700">Why was I asked to verify with a code?</h4>
+                      <p className="text-xs text-slate-500 leading-relaxed">
                         We send a one-time verification code to your registered mobile when we detect unusual activity, or when you're sending money to a new person. This is to make sure it's really you.
                       </p>
                     </div>
                     <div className="space-y-1.5">
-                      <h4 className="text-xs font-bold text-teal-400">What happens if my session is secured automatically?</h4>
-                      <p className="text-[11px] text-neutral-400 leading-relaxed">
+                      <h4 className="text-xs font-bold text-teal-700">What happens if my session is secured automatically?</h4>
+                      <p className="text-xs text-slate-500 leading-relaxed">
                         If we detect activity that doesn't match your normal behaviour, we may automatically secure your session and ask you to sign in again. Your account and funds remain safe throughout.
                       </p>
                     </div>
@@ -1915,22 +1943,22 @@ export default function App() {
 
                 {/* Ticket Form */}
                 <div className="md:col-span-2">
-                  <form onSubmit={handleSupportSubmit} className="bg-neutral-900 border border-white/[0.06] rounded-xl p-6 space-y-4">
-                    <h3 className="text-sm font-semibold tracking-wide text-white">Submit Secure Ticket</h3>
+                  <form onSubmit={handleSupportSubmit} className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+                    <h3 className="text-sm font-semibold tracking-wide text-slate-900">Submit Secure Ticket</h3>
                     
                     {supportSuccess && (
-                      <div className="p-3 bg-teal-500/10 border border-teal-500/25 rounded-lg text-[11px] text-teal-300 flex items-center gap-2">
+                      <div className="p-3 bg-teal-50 border border-teal-300 rounded-lg text-xs text-teal-700 flex items-center gap-2">
                         <CheckCircle size={14} />
                         <span>Ticket submitted and encrypted. Reference #ST-{Math.floor(100000 + Math.random()*900000)}</span>
                       </div>
                     )}
 
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Inquiry Category</label>
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Inquiry Category</label>
                       <select 
                         value={supportTopic} 
                         onChange={(e) => setSupportTopic(e.target.value)}
-                        className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-teal-500/50"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-teal-400"
                       >
                         <option value="general">General Support</option>
                         <option value="security">Security Alert Concern</option>
@@ -1939,25 +1967,87 @@ export default function App() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Detailed Message</label>
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Detailed Message</label>
                       <textarea 
                         rows={4}
                         placeholder="Write support details here..."
                         value={supportMessage}
                         onChange={(e) => setSupportMessage(e.target.value)}
-                        className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-teal-500/50"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-teal-400"
                       ></textarea>
                     </div>
 
                     <button 
                       type="submit" 
                       disabled={!supportMessage.trim()}
-                      className="w-full py-2 bg-teal-500 hover:bg-teal-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-semibold text-xs rounded-lg transition-colors"
+                      className="w-full py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-100 disabled:text-slate-500 text-white font-semibold text-xs rounded-lg transition-colors"
                     >
                       Encrypt & Send
                     </button>
                   </form>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'security' && (
+            <div className="max-w-2xl mx-auto space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                <h2 className="text-xl font-bold tracking-tight text-slate-900">Security Center</h2>
+                <span className="text-sm text-slate-500">Recovery Settings</span>
+              </div>
+              
+              <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-md">
+                <h3 className="text-base font-semibold text-slate-900">Your Cryptographic Recovery Card</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  In case your session is contained or you are locked out due to high-risk assessments, you will need this card to complete the Tier 4 verification challenge and reset your password.
+                </p>
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 flex items-start gap-2.5">
+                  <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Important Security Alert:</strong> Store this card in a safe place. Do not share your recovery card credentials or answers with anyone, including bank staff.
+                  </span>
+                </div>
+                
+                {cardImageSrc ? (
+                  <div className="space-y-4">
+                    <div className="max-w-md mx-auto p-2 bg-slate-50 rounded-lg border border-slate-200">
+                      <img src={cardImageSrc} alt="Recovery Card" className="w-full rounded border border-slate-200" />
+                    </div>
+                    <div className="text-center">
+                      <button 
+                        onClick={() => {
+                          const link = document.createElement('a');
+                          link.href = cardImageSrc;
+                          link.download = `recovery_card_${cryptoState.sessionId}.png`;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        }}
+                        className="px-4 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-800 transition-colors"
+                      >
+                        Download Card PNG
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-48 flex flex-col items-center justify-center gap-2">
+                    <button 
+                      onClick={async () => {
+                        try {
+                          const cardRes = await getRecoveryCard();
+                          const prefix = cardRes.content_type === 'image/png' ? 'data:image/png;base64,' : 'data:image/svg+xml;base64,';
+                          setCardImageSrc(prefix + cardRes.card_base64);
+                        } catch (err) {
+                          alert('Failed to retrieve recovery card. Please make sure your session is active.');
+                        }
+                      }}
+                      className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-lg transition-colors uppercase tracking-wider"
+                    >
+                      Reveal Recovery Card
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1968,47 +2058,47 @@ export default function App() {
 
       {/* Simulated SMS Notification Popup (To display step-up verification codes) */}
       {smsNotification && (
-        <div className="fixed bottom-6 right-6 max-w-sm w-full bg-neutral-900 border-l-4 border-teal-500 rounded-lg p-4 shadow-2xl flex items-start space-x-3.5 z-50 animate-bounce">
-          <div className="grid place-items-center w-8 h-8 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-400 shrink-0 mt-0.5">
+        <div className="fixed bottom-6 right-6 max-w-sm w-full bg-white border-l-4 border-teal-500 rounded-lg p-4 shadow-2xl flex items-start space-x-3.5 z-50 animate-bounce">
+          <div className="grid place-items-center w-8 h-8 rounded-full bg-teal-50 border border-teal-500/20 text-teal-700 shrink-0 mt-0.5">
             <Smartphone size={16} />
           </div>
           <div className="flex-1 space-y-1">
-            <p className="text-xs font-bold text-white flex items-center justify-between">
+            <p className="text-xs font-bold text-slate-900 flex items-center justify-between">
               <span>SMS Notification</span>
-              <span className="text-[10px] text-neutral-500 font-normal">Just now</span>
+              <span className="text-xs text-slate-500 font-normal">Just now</span>
             </p>
-            <p className="text-xs text-neutral-300 leading-relaxed font-mono">{smsNotification}</p>
+            <p className="text-xs text-slate-600 leading-relaxed font-mono">{smsNotification}</p>
           </div>
         </div>
       )}
 
       {/* Security verification OTP modal */}
       {showOtpModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-          <div className="max-w-md w-full bg-neutral-900 border border-white/[0.08] rounded-xl p-6 shadow-2xl space-y-5">
+        <div className="fixed inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <div className="max-w-md w-full bg-white border border-slate-200 rounded-xl p-6 shadow-2xl space-y-5">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/20 grid place-items-center">
-                <Shield size={18} className="text-amber-400" />
+              <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-500/20 grid place-items-center">
+                <Shield size={18} className="text-amber-700" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white">Security Verification</h3>
-                <p className="text-xs text-neutral-500">We need to confirm it's you</p>
+                <h3 className="text-base font-bold text-slate-900">Security Verification</h3>
+                <p className="text-xs text-slate-500">We need to confirm it's you</p>
               </div>
             </div>
-            <p className="text-sm text-neutral-400 leading-relaxed">
+            <p className="text-sm text-slate-500 leading-relaxed">
               To complete this transfer, please enter the 6-digit code sent to your registered mobile number.
             </p>
             {otpError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400 flex items-center gap-2">
+              <div className="p-3 bg-red-50 border border-red-500/20 rounded-lg text-xs text-red-700 flex items-center gap-2">
                 <AlertTriangle size={14} className="shrink-0" /> Incorrect code. Please try again.
               </div>
             )}
             <form onSubmit={handleOtpVerify} className="space-y-4">
               <input type="text" maxLength={6} placeholder="000000" value={otpCode}
                 onChange={e => setOtpCode(e.target.value)}
-                className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg py-3 text-center text-lg font-bold font-mono text-white tracking-[0.4em] focus:outline-none focus:border-teal-500/50" />
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-3 text-center text-lg font-bold font-mono text-slate-900 tracking-[0.4em] focus:outline-none focus:border-teal-400" />
               <button type="submit" disabled={otpCode.length < 6}
-                className="w-full py-2.5 bg-teal-500 hover:bg-teal-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-sm rounded-lg transition-colors">
+                className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-100 disabled:text-slate-500 text-white font-bold text-sm rounded-lg transition-colors">
                 Verify
               </button>
             </form>
@@ -2020,21 +2110,21 @@ export default function App() {
       <div className="fixed bottom-6 left-6 max-w-sm w-full space-y-3 z-50">
         {escalationNotifications.map(notif => {
           const borderColor = notif.toLevel>=3?'border-orange-500':notif.toLevel===2?'border-yellow-500':'border-emerald-500';
-          const iconColor = notif.toLevel>=3?'text-orange-400':notif.toLevel===2?'text-yellow-400':'text-emerald-400';
+          const iconColor = notif.toLevel>=3?'text-orange-400':notif.toLevel===2?'text-yellow-400':'text-emerald-700';
           const title = notif.toLevel>=3?'Verification Required':notif.toLevel===2?'Unusual Activity Noticed':'Account Security Restored';
           const body = notif.toLevel>=3?'Some transactions are temporarily restricted while we verify your identity.':notif.toLevel===2?"We detected a change in how this session is being used. We're keeping a close watch.":'Your session has returned to normal. All banking features are available.';
           return (
-            <div key={notif.id} className={`bg-neutral-900 border-l-4 ${borderColor} border border-white/[0.08] rounded-r-xl p-4 shadow-2xl space-y-2`}>
+            <div key={notif.id} className={`bg-white border-l-4 ${borderColor} border border-slate-200 rounded-r-xl p-4 shadow-2xl space-y-2`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Shield size={14} className={iconColor} />
                   <span className={`text-xs font-bold ${iconColor}`}>{title}</span>
                 </div>
                 <button onClick={() => setEscalationNotifications(prev => prev.filter(n => n.id !== notif.id))}
-                  className="text-neutral-500 hover:text-white text-sm font-bold leading-none">×</button>
+                  className="text-slate-500 hover:text-slate-900 text-sm font-bold leading-none">×</button>
               </div>
-              <p className="text-xs text-neutral-400 leading-relaxed">{body}</p>
-              <p className="text-[10px] text-neutral-600">{notif.timestamp} · AURA Security System</p>
+              <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
+              <p className="text-xs text-slate-400">{notif.timestamp} · AURA Security System</p>
             </div>
           );
         })}
@@ -2045,13 +2135,13 @@ export default function App() {
         <div className="fixed bottom-24 right-6 z-50">
           <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border shadow-2xl ${
             transitionOverlay.to > transitionOverlay.from
-              ? 'bg-neutral-900 border-amber-500/30 text-amber-300'
-              : 'bg-neutral-900 border-emerald-500/30 text-emerald-300'
+              ? 'bg-white border-amber-200 text-amber-700'
+              : 'bg-white border-emerald-500/30 text-emerald-700'
           }`}>
-            <Shield size={16} className={transitionOverlay.to > transitionOverlay.from ? 'text-amber-400' : 'text-emerald-400'} />
+            <Shield size={16} className={transitionOverlay.to > transitionOverlay.from ? 'text-amber-700' : 'text-emerald-700'} />
             <div>
               <div className="text-xs font-bold">{transitionOverlay.to > transitionOverlay.from ? 'Security level increased' : 'Security restored'}</div>
-              <div className="text-[10px] opacity-70">
+              <div className="text-xs opacity-70">
                 {transitionOverlay.to > transitionOverlay.from
                   ? (transitionOverlay.to >= 3 ? 'Some transactions now require verification' : 'Monitoring unusual activity')
                   : 'All features restored'}

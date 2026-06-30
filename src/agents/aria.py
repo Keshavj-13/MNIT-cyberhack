@@ -25,7 +25,86 @@ MIN_RISK     = 0.3  # ignore noise events below this
 
 _vlm_pipe = None   # lazy-loaded transformers pipeline
 
-def _vlm_call(grid_b64: str, hypothesis: str, event_summaries: str) -> str:
+def _short_provider(name: str) -> str:
+    return name.replace("RiskProvider", "").replace("BehavioralProvider", "").replace("Provider", "")
+
+
+def _top_provider(event) -> tuple:
+    """Returns (short_name, score) of the highest-risk provider in this event's breakdown."""
+    if not event.breakdown:
+        return ("", 0.0)
+    best_name, best_score = "", 0.0
+    for name, data in event.breakdown.items():
+        s = data.get("risk_score", 0.0)
+        if s > best_score:
+            best_score, best_name = s, name
+    return (_short_provider(best_name), best_score)
+
+
+def _payload_context(event) -> str:
+    """Extract actionable context from the event's input payload."""
+    p = event.input_payload or {}
+    action = p.get("action", "")
+    parts = []
+    if action == "transfer":
+        amt = p.get("amount")
+        if amt:
+            parts.append(f"₹{amt:,.0f} transfer")
+        if p.get("is_new_beneficiary"):
+            parts.append("new recipient")
+    elif action == "add_beneficiary":
+        name = p.get("beneficiary_name", "")
+        if name:
+            parts.append(f"add '{name}'")
+    elif action == "heartbeat":
+        types = p.get("telemetry_types", [])
+        if "paste" in str(types) or "paste" in str(p):
+            parts.append("paste detected")
+    if not parts and action:
+        parts.append(action)
+    return ", ".join(parts)
+
+
+def _generate_grounded_fallback(events) -> str:
+    if not events:
+        return "No incident events found in the cluster to analyze."
+
+    ordered = sorted(events, key=lambda e: e.timestamp)
+    user_id = ordered[0].user_id
+    max_risk = max(e.overall_risk for e in ordered)
+    final = ordered[-1]
+
+    lines = [f"ARIA timeline for user '{user_id}' ({len(ordered)} events, peak risk {int(max_risk*100)}%):"]
+    for e in ordered:
+        ts = e.timestamp.strftime("%H:%M:%S") if hasattr(e.timestamp, "strftime") else str(e.timestamp)
+        prov, pscore = _top_provider(e)
+        ctx = _payload_context(e)
+        prov_str = f" [{prov} {pscore:.0%}]" if prov and pscore >= 0.3 else ""
+        ctx_str = f" — {ctx}" if ctx else ""
+        lines.append(f"  {ts} | L{e.escalation_level} {e.decision} | {e.event_category} {e.overall_risk:.0%}{prov_str}{ctx_str}")
+
+    # Summarize kill chain
+    cats = [e.event_category for e in ordered]
+    chain_parts = []
+    for stage, desc in [("LURE", "phishing/social engineering"), ("HOOK", "session/biometric hijack"),
+                         ("EXPLOIT", "unauthorized account action"), ("MONETIZE", "fraudulent transfer")]:
+        if stage in cats:
+            chain_parts.append(f"{stage} ({desc})")
+    if chain_parts:
+        lines.append("Kill chain: " + " → ".join(chain_parts))
+
+    # Cryptographic consequence
+    lines.append(f"Cryptographic response: L{final.escalation_level} {final.decision}.")
+    if final.escalation_level >= 4:
+        lines.append("Session deactivated (is_active=False). AES-256 key rotated to v4. Recovery card challenge required.")
+    elif final.escalation_level == 3:
+        lines.append("Sensitive ops locked. AES-256 key rotated. OTP + password reset required.")
+    elif final.escalation_level == 2:
+        lines.append("OTP challenge issued. AES-256 key rotated to elevated tier.")
+
+    return "\n".join(lines)
+
+def _vlm_call(grid_b64: str, hypothesis: str, event_summaries: str, events: list = None) -> str:
     """Call Qwen3.5-0.8B VLM. Tries remote OpenAI-compatible endpoint first, falls back to local."""
     vlm_url   = os.environ.get("VLM_API_URL")
     vlm_model = os.environ.get("VLM_MODEL", "Qwen/Qwen3.5-0.8B")
@@ -53,12 +132,14 @@ def _vlm_call(grid_b64: str, hypothesis: str, event_summaries: str) -> str:
             )
             return resp.choices[0].message.content
         except Exception as e:
+            if events:
+                return _generate_grounded_fallback(events)
             return f"[VLM unavailable: {e}]"
     else:
-        return _vlm_local(grid_b64, prompt, vlm_model)
+        return _vlm_local(grid_b64, prompt, vlm_model, events)
 
 
-def _vlm_local(grid_b64: str, prompt: str, model_id: str) -> str:
+def _vlm_local(grid_b64: str, prompt: str, model_id: str, events: list = None) -> str:
     global _vlm_pipe
     try:
         import io, base64 as b64
@@ -71,6 +152,8 @@ def _vlm_local(grid_b64: str, prompt: str, model_id: str) -> str:
         out = _vlm_pipe(text=msgs, images=[img], max_new_tokens=512)
         return out[0]["generated_text"][-1]["content"]
     except Exception as e:
+        if events:
+            return _generate_grounded_fallback(events)
         return f"[Local VLM error: {e}]"
 
 
@@ -148,18 +231,37 @@ def _scan_and_investigate():
                     summaries.append(auto_summary(contribs, best.overall_risk))
 
             grid = make_grid_chart(charts, f"ARIA cluster: {key}  events={ids}")
+            ordered_events = sorted(events, key=lambda e: e.timestamp)
             event_summary = "; ".join(
-                f"event#{e.id} risk={e.overall_risk:.2f} cat={e.event_category}" for e in events
+                f"{e.timestamp.strftime('%H:%M:%S')} L{e.escalation_level} {e.decision} "
+                f"risk={e.overall_risk:.0%} {e.event_category}"
+                + (f" [{_short_provider(max(e.breakdown, key=lambda k: e.breakdown[k].get('risk_score',0)))} "
+                   f"{max(e.breakdown[k].get('risk_score',0) for k in e.breakdown):.0%}]"
+                   if e.breakdown else "")
+                + (f" ctx={_payload_context(e)}" if _payload_context(e) else "")
+                for e in ordered_events
             )
-            vlm_text = _vlm_call(grid, hypothesis, event_summary) if grid else "[no chart data]"
+            vlm_text = _vlm_call(grid, hypothesis, event_summary, events) if grid else "[no chart data]"
             conf = _confidence(scores, cats)
+
+            # Build grounded evidence summary from actual event data
+            grounded_parts = []
+            for e in sorted(events, key=lambda x: x.overall_risk, reverse=True)[:3]:
+                ctx = _payload_context(e)
+                prov, pscore = _top_provider(e)
+                grounded_parts.append(
+                    f"L{e.escalation_level} {e.decision} {e.event_category} {e.overall_risk:.0%}"
+                    + (f" via {prov}" if prov else "")
+                    + (f" ({ctx})" if ctx else "")
+                )
+            evidence_text = " | ".join(grounded_parts) or " | ".join(summaries[:3])
 
             inv = AriaInvestigation(
                 cluster_key=key,
                 cluster_event_ids=ids,
                 hypothesis=hypothesis,
                 classification=classification,
-                evidence_summary=" | ".join(summaries[:3]),
+                evidence_summary=evidence_text,
                 vlm_assessment=vlm_text,
                 confidence=conf,
                 status="open",

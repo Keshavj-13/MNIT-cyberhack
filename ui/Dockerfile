@@ -4,10 +4,11 @@ COPY package*.json ./
 RUN npm ci --prefer-offline
 COPY . .
 # build each surface separately into dist/{surface}/
-RUN npx vite build --config surfaces/customer/vite.config.ts  --outDir dist/customer  --emptyOutDir
-RUN npx vite build --config surfaces/admin/vite.config.ts     --outDir dist/admin     --emptyOutDir
-RUN npx vite build --config surfaces/attacker/vite.config.ts  --outDir dist/attacker  --emptyOutDir
-RUN npx vite build --config surfaces/showcase/vite.config.ts  --outDir dist/showcase  --emptyOutDir
+RUN npx vite build --config surfaces/customer/vite.config.ts  --outDir ../../dist/customer  --emptyOutDir
+RUN npx vite build --config surfaces/admin/vite.config.ts     --outDir ../../dist/admin     --emptyOutDir
+RUN npx vite build --config surfaces/attacker/vite.config.ts  --outDir ../../dist/attacker  --emptyOutDir
+RUN npx vite build --config surfaces/showcase/vite.config.ts  --outDir ../../dist/showcase  --emptyOutDir
+
 
 FROM node:20-alpine
 WORKDIR /app

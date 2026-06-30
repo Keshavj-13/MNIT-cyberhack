@@ -62,6 +62,8 @@ class User(Base):
     email_verified = Column(Boolean, default=False)
     phone_verified = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
+    is_ghost = Column(Boolean, default=False)           # non-loginable recipient account
+    recovery_card_data = Column(JSON, nullable=True)    # {A1:7, B3:2, ...} for Tier 4
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class OTPVerification(Base):
@@ -91,6 +93,17 @@ class AriaInvestigation(Base):
     confidence = Column(Float, default=0.0)
     status = Column(String, default="open")           # open / resolved / fp_confirmed
 
+class Beneficiary(Base):
+    """Per-user saved beneficiaries — persisted so they survive API restarts."""
+    __tablename__ = "beneficiaries"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    name = Column(String, nullable=False)
+    account_number = Column(String, nullable=False)
+    bank_name = Column(String, nullable=False)
+    is_ghost = Column(Boolean, default=False)   # auto-created ghost recipient
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
 class RevokedToken(Base):
     __tablename__ = "revoked_tokens"
     
@@ -118,14 +131,24 @@ def _migrate_schema():
     'no such column: security_events.user_id'.
     """
     migrations = {
-        "user_id": "ALTER TABLE security_events ADD COLUMN user_id VARCHAR DEFAULT 'ANONYMOUS'",
-        "session_id": "ALTER TABLE security_events ADD COLUMN session_id VARCHAR DEFAULT 'DEFAULT'",
-        "event_category": "ALTER TABLE security_events ADD COLUMN event_category VARCHAR DEFAULT 'NEUTRAL'",
+        "security_events": {
+            "user_id": "ALTER TABLE security_events ADD COLUMN user_id VARCHAR DEFAULT 'ANONYMOUS'",
+            "session_id": "ALTER TABLE security_events ADD COLUMN session_id VARCHAR DEFAULT 'DEFAULT'",
+            "event_category": "ALTER TABLE security_events ADD COLUMN event_category VARCHAR DEFAULT 'NEUTRAL'",
+        },
+        "users": {
+            "is_ghost": "ALTER TABLE users ADD COLUMN is_ghost BOOLEAN DEFAULT 0",
+            "recovery_card_data": "ALTER TABLE users ADD COLUMN recovery_card_data JSON",
+        },
     }
     with engine.connect() as conn:
-        existing_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(security_events)"))}
-        for col, ddl in migrations.items():
-            if col not in existing_cols:
-                conn.execute(text(ddl))
+        for table, cols in migrations.items():
+            existing_cols = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+            for col, ddl in cols.items():
+                if col not in existing_cols:
+                    try:
+                        conn.execute(text(ddl))
+                    except Exception:
+                        pass
         conn.commit()
 

@@ -161,6 +161,16 @@ class SocialEngineeringRiskProvider(RiskProvider):
                 expl.append(f"ML Inference failed: {e}")
         elif not url:
             expl.append("No URL in payload — skipped.")
+
+        # Paste heuristic: digit content pasted during a session is a social engineering tell
+        # (victim coached to copy-paste OTP, account number, or scripted transfer amount)
+        paste_rate = float(data.get("paste_rate", 0.0))
+        paste_digit_ratio = float(data.get("paste_digit_ratio", 0.0))
+        if paste_rate > 0 and paste_digit_ratio > 0.5:
+            boost = min(0.35, paste_rate * 0.15 + paste_digit_ratio * 0.2)
+            score = min(1.0, score + boost * (1.0 - score))
+            expl.append(f"Digit paste detected (rate={paste_rate:.2f}/min, digit_ratio={paste_digit_ratio:.0%}) — social engineering signal.")
+
         return RiskResult(provider_name="URLPhishing", risk_score=score, confidence=0.9,
                           severity="HIGH" if score > self.threshold else "LOW",
                           event_category="LURE" if score > self.threshold else "NEUTRAL",

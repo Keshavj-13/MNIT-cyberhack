@@ -132,5 +132,48 @@ class TestSurfacesIsolation(unittest.TestCase):
         self.db.delete(cust_sess)
         self.db.commit()
 
+    def test_telemetry_triggers_evaluation(self):
+        """Telemetry batches must invoke risk evaluation and rotate the live session when warranted."""
+        import secrets
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from src.db.models import TelemetryData
+
+        session_id = f"test_tel_sid_{secrets.token_hex(4)}"
+        aes_key = generate_aes_key()
+        cust_sess = CustomerSession(
+            session_id=session_id,
+            user_id="test_cust",
+            aes_key=aes_key,
+            risk_level=1,
+            key_version=1,
+            is_active=True
+        )
+        self.db.add(cust_sess)
+        self.db.commit()
+
+        events = [
+            {"type": "session", "timestamp": 1000, "data": {"event": "page_load", "url": "https://bank.example/home"}},
+            {"type": "keystroke", "timestamp": 1100, "data": {"event": "dwell", "dwellTime": 120, "key": "a"}},
+            {"type": "mouse", "timestamp": 1200, "data": {"event": "move", "x": 10, "y": 20, "velocity": 2.5}},
+        ]
+
+        with patch("src.api.customer_api.run_evaluation", return_value=SimpleNamespace(escalation_level=3)) as mocked_eval:
+            res = self.customer_client.post("/customer/telemetry", json={"session_id": session_id, "events": events})
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["count"], len(events))
+        self.assertTrue(mocked_eval.called)
+
+        self.db.refresh(cust_sess)
+        self.assertEqual(cust_sess.risk_level, 3)
+        self.assertEqual(cust_sess.key_version, 2)
+        self.assertNotEqual(cust_sess.aes_key, aes_key)
+        self.assertEqual(self.db.query(TelemetryData).filter(TelemetryData.session_id == session_id).count(), len(events))
+
+        self.db.query(TelemetryData).filter(TelemetryData.session_id == session_id).delete()
+        self.db.delete(cust_sess)
+        self.db.commit()
+
 if __name__ == "__main__":
     unittest.main()

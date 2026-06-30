@@ -46,7 +46,10 @@ class FeatureExtractor:
             "mouse_path_straightness": 0.0,
             "mouse_click_density": 0.0,
             "navigation_speed": 0.0,
-            "interaction_density": 0.0
+            "interaction_density": 0.0,
+            "paste_rate": 0.0,
+            "paste_digit_ratio": 0.0,
+            "focus_switch_rate": 0.0,
         }
 
     def _extract_behavioral_features(self, keystrokes: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -157,20 +160,35 @@ class FeatureExtractor:
         }
 
     def _extract_session_features(self, session_events: List[Dict[str, Any]], all_events: List[Dict[str, Any]]) -> Dict[str, Any]:
-        # Navigation speed: tab changes or page loads per minute
         nav_events = [s for s in session_events if s['data'].get('event') in ('tab_change', 'page_load')]
-        
+        paste_events = [s for s in session_events if s['data'].get('event') == 'paste']
+        blur_events = [s for s in session_events if s['data'].get('event') == 'focus_change' and s['data'].get('state') == 'blur']
+
         interaction_density = 0.0
         navigation_speed = 0.0
-        
+        paste_rate = 0.0
+        paste_digit_ratio = 0.0
+        focus_switch_rate = 0.0
+
         if all_events:
             ts = [e.get('timestamp', 0) for e in all_events]
             duration_min = (max(ts) - min(ts)) / 60000.0
             if duration_min > 0:
                 interaction_density = len(all_events) / duration_min
                 navigation_speed = len(nav_events) / duration_min
+                paste_rate = len(paste_events) / duration_min
+                focus_switch_rate = len(blur_events) / duration_min
+
+        if paste_events:
+            digit_pastes = sum(1 for p in paste_events if p['data'].get('hasDigits'))
+            paste_digit_ratio = digit_pastes / len(paste_events)
 
         return {
             "navigation_speed": float(navigation_speed),
-            "interaction_density": float(interaction_density)
+            "interaction_density": float(interaction_density),
+            # paste_rate > 0 with digit content is a strong MitM indicator
+            "paste_rate": float(paste_rate),
+            "paste_digit_ratio": float(paste_digit_ratio),
+            # rapid focus switching = user checking reference material (social engineering tell)
+            "focus_switch_rate": float(focus_switch_rate),
         }

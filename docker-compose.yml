@@ -8,7 +8,8 @@ services:
   customer-api:
     build: { context: ., dockerfile: Dockerfile }
     command: uvicorn src.api.customer_api:app --host 0.0.0.0 --port 8001
-    network_mode: host
+    ports:
+      - "8001:8001"
     volumes: [./models:/app/models:ro, db_data:/app/db]
     environment: [ALLOW_DEFAULT_SECRETS=1, "SQLALCHEMY_DATABASE_URL=sqlite:////app/db/security_platform.db"]
     restart: unless-stopped
@@ -16,7 +17,8 @@ services:
   admin-api:
     build: { context: ., dockerfile: Dockerfile.admin }
     command: uvicorn src.api.admin_api:app --host 0.0.0.0 --port 8002
-    network_mode: host
+    ports:
+      - "8002:8002"
     volumes: [./models:/app/models:ro, db_data:/app/db]
     environment:
       - ALLOW_DEFAULT_SECRETS=1
@@ -27,7 +29,8 @@ services:
   attacker-api:
     build: { context: ., dockerfile: Dockerfile }
     command: uvicorn src.api.attacker_api:app --host 0.0.0.0 --port 8003
-    network_mode: host
+    ports:
+      - "8003:8003"
     volumes: [./models:/app/models:ro, db_data:/app/db]
     environment: [ALLOW_DEFAULT_SECRETS=1, "SQLALCHEMY_DATABASE_URL=sqlite:////app/db/security_platform.db"]
     restart: unless-stopped
@@ -35,12 +38,17 @@ services:
   showcase-api:
     build: { context: ., dockerfile: Dockerfile }
     command: uvicorn src.api.showcase_api:app --host 0.0.0.0 --port 8004
-    network_mode: host
+    ports:
+      - "8004:8004"
     volumes: [./models:/app/models:ro, db_data:/app/db]
     environment: [ALLOW_DEFAULT_SECRETS=1, "SQLALCHEMY_DATABASE_URL=sqlite:////app/db/security_platform.db"]
     restart: unless-stopped
 
   ui:
     build: { context: ui, dockerfile: Dockerfile }
-    network_mode: host
+    ports:
+      - "3001:3001"
+      - "3002:3002"
+      - "3003:3003"
+      - "3004:3004"
     restart: unless-stopped

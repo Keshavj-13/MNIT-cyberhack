@@ -127,6 +127,11 @@ class RiskEngine:
         if primary_res and primary_res.confidence < 0.5 and primary_res.risk_score > 0.5:
             final_conf *= (1.0 - (primary_res.risk_score * 0.5))
 
+        # 4b. Session prior — blend elevated baseline from current risk level
+        prior = float(input_data.get("session_prior_risk", 0.0))
+        if prior > 0:
+            weighted_score = min(1.0, weighted_score + prior * (1.0 - weighted_score))
+
         # 5. Stateful Correlation (Attack Chain Multipliers)
         final_score, correlation_expl = self._apply_correlation(weighted_score, results, history)
         

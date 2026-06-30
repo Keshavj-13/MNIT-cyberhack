@@ -164,16 +164,6 @@ def verify_jwt_token(token: str, surface: str, db: Session) -> Dict[str, Any]:
             if is_revoked:
                 raise HTTPException(status_code=401, detail="Session has been revoked/terminated")
                 
-        # Check if customer session is still active
-        if surface == "customer":
-            session_id = payload.get("sid")
-            if session_id:
-                cust_session = db.query(CustomerSession).filter(CustomerSession.session_id == session_id).first()
-                if not cust_session or not cust_session.is_active:
-                    raise HTTPException(status_code=401, detail="Customer session is inactive or locked out")
-                if cust_session.risk_level >= 4:
-                    raise HTTPException(status_code=401, detail="Session terminated: Containment triggered")
-                    
         return payload
     except ValueError as e:
         raise HTTPException(status_code=401, detail=f"Invalid session credentials: {str(e)}")

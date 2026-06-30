@@ -73,7 +73,14 @@ def run_evaluation(payload: Dict[str, Any], db: Session) -> EngineResult:
         ) for e in past_events_db
     ][::-1]  # Chronological
 
-    # 3. Evaluate using the enriched payload
+    # 3. Evaluate using the enriched payload, carrying forward session risk as a prior
+    from src.db.models import CustomerSession
+    current_session = db.query(CustomerSession).filter(CustomerSession.session_id == session_id).first()
+    if current_session and current_session.risk_level > 1:
+        # Blend current session risk level into the payload so the engine sees an elevated baseline
+        enriched_payload["session_prior_risk"] = (current_session.risk_level - 1) * 0.25  # L2→+0.25, L3→+0.50
+        enriched_payload["session_risk_level"] = current_session.risk_level
+
     engine = RiskEngine(_registry.get_providers())
     result = engine.evaluate_all(enriched_payload, history)
 

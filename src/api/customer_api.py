@@ -5,7 +5,7 @@ import hashlib
 import smtplib
 import datetime
 from email.message import EmailMessage
-from fastapi import FastAPI, Depends, HTTPException, Body, Security, Response, Cookie
+from fastapi import FastAPI, Depends, HTTPException, Body, Security, Response, Cookie, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -44,11 +44,23 @@ def get_db():
         db.close()
 
 # JWT Token extractor helper
-def get_current_user_payload(authorization: Optional[str] = Cookie(None, alias="customer_session"), db: Session = Depends(get_db)):
-    if not authorization:
-        # Fallback to Authorization header if cookies aren't set
-        raise HTTPException(status_code=401, detail="Authentication session cookie required")
-    return verify_jwt_token(authorization, "customer", db)
+def get_current_user_payload(
+    authorization: Optional[str] = Cookie(None, alias="customer_session"),
+    auth_header: Optional[str] = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    token = None
+    if auth_header:
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+        else:
+            token = auth_header
+    if not token:
+        token = authorization
+            
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication session cookie or token required")
+    return verify_jwt_token(token, "customer", db)
 
 # Encrypted Request/Response Models
 class EncryptedPayload(BaseModel):
@@ -405,6 +417,32 @@ def login(payload: Dict[str, str] = Body(...), response: Response = Response(), 
             detail=f"Account verification incomplete. Unverified: {', '.join(unverified)}. Please complete verification first."
         )
     
+    # Check if the user's latest session is contained/locked out
+    latest_sess = db.query(CustomerSession).filter(CustomerSession.user_id == username).order_by(CustomerSession.created_at.desc()).first()
+    if latest_sess and latest_sess.risk_level >= 4:
+        # Keep it contained, but generate a new token so they can run recovery
+        latest_sess.is_active = True # Re-activate so token validation passes
+        db.commit()
+        
+        token = create_jwt_token(username, "customer", expires_in_minutes=30, extra_claims={"sid": latest_sess.session_id})
+        response.set_cookie(
+            key="customer_session",
+            value=token,
+            httponly=True,
+            secure=os.environ.get("SECURE_COOKIES", "false").lower() == "true",
+            samesite="strict",
+            path="/customer"
+        )
+        return {
+            "status": "success",
+            "username": username,
+            "session_id": latest_sess.session_id,
+            "aes_key": latest_sess.aes_key,
+            "key_version": latest_sess.key_version,
+            "risk_level": 4,
+            "token": token
+        }
+
     # Deactivate all previous sessions for this user so run-live always finds the right one
     db.query(CustomerSession).filter(
         CustomerSession.user_id == username,
@@ -444,7 +482,8 @@ def login(payload: Dict[str, str] = Body(...), response: Response = Response(), 
         "session_id": session_id,
         "aes_key": aes_key,
         "key_version": 1,
-        "risk_level": 1
+        "risk_level": 1,
+        "token": token
     }
 
 @app.post("/customer/auth/logout")
@@ -677,6 +716,30 @@ def telemetry(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)
         ))
     db.commit()
     return {"status": "success", "count": len(events)}
+
+@app.get("/customer/auth/recovery-card")
+def get_recovery_card_route(user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
+    import base64
+    db_user = db.query(User).filter(User.username == user.get("sub")).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if not db_user.recovery_card_data:
+        from src.api.internal.recovery_card import generate_card
+        db_user.recovery_card_data = generate_card()
+        db.commit()
+        
+    from src.api.internal.recovery_card import render_card_png
+    card_bytes = render_card_png(db_user.recovery_card_data, db_user.username)
+    
+    is_svg = b"<svg" in card_bytes
+    content_type = "image/svg+xml" if is_svg else "image/png"
+    card_base64 = base64.b64encode(card_bytes).decode("utf-8")
+    
+    return {
+        "content_type": content_type,
+        "card_base64": card_base64
+    }
 
 if __name__ == "__main__":
     init_db()

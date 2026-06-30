@@ -6,6 +6,17 @@ const API_BASE = `${window.location.protocol}//${window.location.hostname}:8001`
 // Enable cookie credentials
 axios.defaults.withCredentials = true;
 
+// Inject sessionStorage token if present to support tab-level isolation
+axios.interceptors.request.use((config) => {
+  const token = sessionStorage.getItem('cbi_auth_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+}, (error) => {
+  return Promise.reject(error);
+});
+
 export interface EncryptedPayload {
   session_id: string;
   key_version: int;
@@ -186,4 +197,9 @@ export async function sendTelemetryBeacon(
       keepalive: true
     });
   }
+}
+
+export async function getRecoveryCard(): Promise<any> {
+  const res = await axios.get(`${API_BASE}/customer/auth/recovery-card`);
+  return res.data;
 }
