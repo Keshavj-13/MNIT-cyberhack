@@ -122,7 +122,7 @@ Fig.~\ref{fig:tiers} maps this spectrum visually, showing how a single continuou
 \end{figure}
 
 \section{System Architecture}
-AURA's architecture is organized into three cooperating planes, sketched in Fig.~\ref{fig:architecture}: a Client Telemetry Plane that observes the customer without interrupting them, an API Gateway and Session Cryptography Plane that mediates every request and owns the keys, and an AI/ML Decision Engine that turns raw behavior into a risk score. The three planes share one feedback loop. Telemetry flows in from the browser, a risk score flows out of the model, and that score immediately reshapes how the gateway treats the next request, including, when necessary, retiring the very key the client just used to encrypt it.
+AURA’s architecture is organized into three cooperating planes: a Client Telemetry Plane, a Four-Surface API Gateway \& Cryptography Plane, and an AI/ML Decision Engine. To ensure absolute data hygiene and prevent cross-contamination, the API Gateway is split into four strictly isolated FastAPIs running on different ports: Customer (Banking workflows), Admin (SOC Dashboard), Attacker (Threat Simulation), and Showcase (Public Model Reporting). Each surface enforces strict CORS boundaries and its own authentication model. The three planes share a feedback loop: Telemetry flows in from the Customer browser, a fused risk score flows out of the engine, and that score immediately reshapes how the gateway treats the next request—including retiring the AES key the client just used to encrypt it.
 
 \begin{figure}[htbp]
 \centering
@@ -169,7 +169,8 @@ AURA's stack was chosen for one practical reason ahead of any other, every compo
 Backend Framework & FastAPI (Python 3.10+) & Native asynchronous request handling keeps telemetry ingestion non-blocking, with automatic OpenAPI schema generation for free. \\
 Database Layer & SQLite3 + SQLAlchemy ORM & Lightweight enough for a hackathon POC while still modeling session records, transaction histories, and event-level telemetry logs relationally. \\
 Frontend UI & React 18 + Vite & Sub-second hot reload and client-side routing keep the telemetry collector responsive; styled in vanilla TailwindCSS to match the Central Bank of India visual identity. \\
-Deep Learning Engine & PyTorch 2.1 & Runs VarCNN inference server-side against pre-loaded behavior-prediction weights, fast enough to score a session before a transfer completes. \\
+Deep Learning Engine & PyTorch 2.1 & Runs VarCNN inference server-side against pre-loaded behavior-prediction weights for behavioral drift analysis. \\
+ML Ensemble (XAI) & LightGBM, XGBoost, SHAP, Qwen3.5 & Processes transactional and intent-based telemetry. SHAP generates feature-contribution charts, which are passed to a local Vision Language Model (Qwen3.5) to synthesize natural-language threat assessments for SOC operators. \\
 \hline
 \end{tabular}
 \caption{AURA Technology Stack}
@@ -239,6 +240,18 @@ Three tables carry the full state AURA needs to reason about a session: \texttt{
                & \texttt{username} & VARCHAR(50) & Unique login credential \\
                & \texttt{password\_hash} & VARCHAR(256) & Passlib PBKDF2 hash \\
                & \texttt{recovery\_card\_data} & JSON & 6 $\times$ 6 grid of random digits (A1\textendash F6) \\
+\hline
+\texttt{security\_events} & \texttt{id} & INTEGER (PK) & Unique primary key \\
+               & \texttt{event\_category} & VARCHAR(20) & Kill-chain stage (LURE, HOOK, EXPLOIT, etc.) \\
+               & \texttt{overall\_risk} & FLOAT & Final fused risk score \\
+               & \texttt{breakdown} & JSON & Per-provider sub-scores and confidence \\
+\hline
+\texttt{aria\_investigations} & \texttt{id} & INTEGER (PK) & Unique primary key \\
+               & \texttt{cluster\_key} & VARCHAR(50) & Investigated user ID \\
+               & \texttt{vlm\_assessment} & TEXT & Natural-language threat assessment from Qwen3.5 \\
+\hline
+\texttt{otp\_verifications} & \texttt{id} & INTEGER (PK) & Unique primary key \\
+               & \texttt{otp\_hash} & VARCHAR(256) & PBKDF2 hash of the one-time code \\
 \hline
 \texttt{customer\_sessions} & \texttt{session\_id} & VARCHAR(64) & Unique session string \\
                & \texttt{username} & VARCHAR(50) & Owner of the session \\
@@ -315,6 +328,24 @@ Buffer size is the main lever on detection quality, and Fig.~\ref{fig:accuracy} 
 \label{fig:accuracy}
 \end{figure}
 
+\subsection{The Multi-Provider Risk Engine}
+While VarCNN secures the continuous behavioral dimension, a stolen session often involves discrete high-risk actions like fraudulent transfers or navigating to phishing links. To cover the full attack surface, AURA's Risk Engine fuses outputs from six distinct intelligence providers:
+
+\begin{enumerate}
+    \item \textbf{TransactionRiskProvider}: An XGBoost/LightGBM model trained on the Feedzai BAF dataset, scoring the fraud likelihood of transfer amounts and beneficiary novelty.
+    \item \textbf{SocialEngineeringRiskProvider}: An XGBoost model performing lexical analysis on URLs to detect phishing intent.
+    \item \textbf{AccountTakeoverProvider}: A Random Forest classifier analyzing CMU Keystroke timing features (dwell, flight, and rhythm).
+    \item \textbf{BeaconBehavioralProvider}: The VarCNN model handling continuous mouse and keyboard trajectory embeddings.
+    \item \textbf{Network \& Device Trust Providers}: Heuristics tracking impossible-travel, VPN usage, and rooted devices.
+\end{enumerate}
+
+The Risk Engine applies contextual weight scaling (e.g., emphasizing Transaction Risk when a new payee is added) and uses attack-chain correlation thresholds to aggressively escalate risk if a LURE stage (phishing) is followed by a MONETIZE stage (transfer).
+
+\subsection{ARIA \& Explainability}
+To assist human Security Operations Center (SOC) analysts, AURA includes the Autonomous Risk Intelligence Agent (ARIA). Running as a continuous background asynchronous loop, ARIA scans recent \texttt{security\_events} and clusters anomalous behavior by user session. 
+
+When a threat cluster breaches a confidence threshold, ARIA extracts the raw feature arrays and utilizes SHAP (SHapley Additive exPlanations) to generate visual bar charts of the feature contributions pushing the risk score up or down. These visual charts, alongside a timeline of the user's actions, are passed to a Vision Language Model (Qwen3.5-0.8B). The VLM acts as an automated L1 analyst, outputting a synthesized, natural-language threat assessment detailing the suspected attack vector (e.g., 'Account takeover followed by fraudulent transfer to a new beneficiary'). This drastically reduces the time-to-comprehension for human operators managing Tier-3 and Tier-4 containment events.
+
 \section{Security Measures}
 
 
@@ -325,7 +356,7 @@ Buffer size is the main lever on detection quality, and Fig.~\ref{fig:accuracy} 
 
 \textbf{Measure} & \textbf{How it protects the session} \\
 \hline
-Tab Isolation & Cookie-based auth is replaced with Bearer tokens stored only in \texttt{sessionStorage}, which browsers never share across tabs. A compromised tab stays a compromised tab, instead of becoming a compromised account. \\
+Tab Isolation & While standard authentication relies on a secure HTTPOnly JWT cookie, AURA achieves payload-level tab isolation by encrypting all requests and responses with a dynamic AES-256 symmetric key stored exclusively in the browser tab's \texttt{sessionStorage}. Because \texttt{sessionStorage} is strictly scoped to a single tab and never shared, a compromised tab cannot hijack the cryptographic session of an adjacent banking tab, neutralizing cross-site request forgery and cookie-replay attacks. \\
 Active Sliding Timer & Idle sessions sign out automatically after 10 minutes. Mouse movement, clicks, and key presses reset the clock, so the timer punishes abandonment, not deliberation. \\
 Cryptographic Recovery Card & Tier 4 containment deactivates the session outright. Reactivation demands an OTP plus coordinates from a downloaded 6 $\times$ 6 recovery card, an out-of-band secret a remote attacker holding only a stolen session token never possesses. \\
 \hline
@@ -343,7 +374,7 @@ AURA assumes the client's browser supports modern Web APIs, specifically the sta
 \subsection{Limitations}
 \begin{itemize}
     \item \textbf{Device Variation}: a behavioral profile built on a desktop does not transfer to a touchscreen. Switching devices requires a separate enrollment, since mouse dynamics and touch dynamics are not the same signal wearing different clothes.
-    \item \textbf{Cold Start}: a newly registered customer has no behavioral history to compare against. AURA defaults new accounts to Tier 2 monitoring for a 10-transaction training period until a reliable profile exists.
+    \item \textbf{Cold Start}: a newly registered customer has no behavioral history to compare against. AURA defaults new accounts to Tier 2 monitoring for an initial training period of 64 telemetry events (keystrokes and mouse movements) until a reliable behavioral embedding can be established.
 \end{itemize}
 
 \subsection{Future Enhancements}
