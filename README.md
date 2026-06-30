@@ -6,13 +6,33 @@ The project was built for an MNIT cyberhack context, but the repository is organ
 
 ## Platform Preview
 
-| Admin Risk Dashboard | Customer Banking Flow |
+### 🏢 Customer Banking Portal
+| Customer Login | Customer Dashboard |
 |:---:|:---:|
-| ![Risk dashboard](./screenshots/dashboard.png) | ![Bank simulator](./screenshots/playground.png) |
+| ![Customer Login](./screenshots/customer_login.png) | ![Customer Dashboard](./screenshots/customer_dashboard.png) |
 
-| Decision Timeline |
-|:---:|
-| ![Decision timeline](./screenshots/timeline.png) |
+| Transfer Funds | Beneficiary Management | Statements |
+|:---:|:---:|:---:|
+| ![Transfer Funds](./screenshots/customer_transfer.png) | ![Beneficiary Management](./screenshots/customer_beneficiaries.png) | ![Statements](./screenshots/customer_statements.png) |
+
+| Security Card (Escalation & Keys) | Session Contained Lockout |
+|:---:|:---:|
+| ![Security Card](./screenshots/customer_security_card.png) | ![Contained Lockout](./screenshots/customer_contained_lockout.png) |
+
+### 🛡️ Admin Security Operations Dashboard
+| Admin Incident Console | Admin ARIA Investigations |
+|:---:|:---:|
+| ![Admin Incident Console](./screenshots/admin_incident.png) | ![Admin ARIA Investigations](./screenshots/admin_aria.png) |
+
+| Session Monitor & Live Telemetry | Risk Engine Configuration |
+|:---:|:---:|
+| ![Session Monitor](./screenshots/admin_sessions.png) | ![Risk Engine Configuration](./screenshots/admin_config.png) |
+
+### 🚀 Public Research & Attacker Simulation
+| Public Showcase Portal | Attacker Threat Simulator |
+|:---:|:---:|
+| ![Showcase Portal](./screenshots/showcase_dashboard.png) | ![Attacker Simulator](./screenshots/attacker_dashboard.png) |
+
 
 ## What It Does
 

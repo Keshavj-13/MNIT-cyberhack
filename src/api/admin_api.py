@@ -102,7 +102,7 @@ def list_events(limit: int = 50, user_id: Optional[str] = None, db: Session = De
 @app.get("/admin/sessions", response_model=List[Dict[str, Any]])
 def list_sessions(db: Session = Depends(get_db), admin = Depends(get_current_admin)):
     """List all active customer sessions with their key rotation states and escalation risk levels."""
-    sessions = db.query(CustomerSession).order_by(CustomerSession.updated_at.desc()).all()
+    sessions = db.query(CustomerSession).order_by(CustomerSession.is_active.desc(), CustomerSession.updated_at.desc()).all()
     return [
         {
             "session_id": s.session_id,
@@ -117,6 +117,22 @@ def list_sessions(db: Session = Depends(get_db), admin = Depends(get_current_adm
         for s in sessions
     ]
 
+def _ensure_latest_event(sess, db: Session):
+    latest = db.query(SecurityEvent).filter(
+        SecurityEvent.session_id == sess.session_id
+    ).first()
+    if not latest:
+        from src.api.internal.evaluation_runner import run_evaluation
+        try:
+            run_evaluation({
+                "user_id": sess.user_id,
+                "session_id": sess.session_id,
+                "action": "heartbeat",
+                "is_new_beneficiary": False
+            }, db)
+        except Exception as e:
+            print(f"[ERROR] Failed to run on-the-fly evaluation: {e}")
+
 @app.get("/admin/sessions/{session_id}/live")
 def get_session_live(session_id: str, db: Session = Depends(get_db), admin = Depends(get_current_admin)):
     """Return live state for a selected session: recent telemetry, latest provider scores, features, risk."""
@@ -124,13 +140,25 @@ def get_session_live(session_id: str, db: Session = Depends(get_db), admin = Dep
     if not sess:
         raise HTTPException(status_code=404, detail="Session not found.")
 
+    _ensure_latest_event(sess, db)
+
     # Last 20 telemetry events
     telemetry_rows = db.query(TelemetryData).filter(
         TelemetryData.session_id == session_id
     ).order_by(TelemetryData.id.desc()).limit(20).all()
-    telemetry = [{"id": t.id, "type": t.type, "data": t.data,
-                  "timestamp": t.timestamp.isoformat() if t.timestamp else None}
-                 for t in reversed(telemetry_rows)]
+    import json
+    telemetry = []
+    for t in reversed(telemetry_rows):
+        t_data = t.data
+        if isinstance(t_data, str):
+            try:
+                t_data = json.loads(t_data)
+            except Exception:
+                pass
+        telemetry.append({
+            "id": t.id, "type": t.type, "data": t_data,
+            "timestamp": t.timestamp.isoformat() if t.timestamp else None
+        })
 
     # Latest security event
     latest_event = db.query(SecurityEvent).filter(
@@ -148,7 +176,14 @@ def get_session_live(session_id: str, db: Session = Depends(get_db), admin = Dep
                 ts_val = int(t.timestamp.replace(tzinfo=datetime.timezone.utc).timestamp() * 1000)
             except Exception:
                 pass
-        events_list.append({"type": t.type, "data": t.data, "timestamp": ts_val})
+        t_data = t.data
+        if isinstance(t_data, str):
+            try:
+                import json
+                t_data = json.loads(t_data)
+            except Exception:
+                pass
+        events_list.append({"type": t.type, "data": t_data, "timestamp": ts_val})
     features = FeatureExtractor().extract_features(events_list)
 
     return {
@@ -332,6 +367,12 @@ def get_event_detail(event_id: int, db: Session = Depends(get_db), admin = Depen
 @app.get("/admin/sessions/{session_id}/timeline")
 def get_session_timeline(session_id: str, db: Session = Depends(get_db), admin = Depends(get_current_admin)):
     """Chronological event timeline for a single session — used by the admin Watch panel."""
+    sess = db.query(CustomerSession).filter(CustomerSession.session_id == session_id).first()
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    _ensure_latest_event(sess, db)
+
     events = db.query(SecurityEvent).filter(
         SecurityEvent.session_id == session_id
     ).order_by(SecurityEvent.timestamp.asc()).all()

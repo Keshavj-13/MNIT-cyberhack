@@ -543,7 +543,20 @@ _USER_TRANSACTIONS: Dict[str, list] = {}
 
 def _get_accounts(user_id: str) -> dict:
     if user_id not in _USER_ACCOUNTS:
-        _USER_ACCOUNTS[user_id] = copy.deepcopy(_DEFAULT_ACCOUNTS)
+        if user_id.startswith("ghost_"):
+            acct_num = f"TR-{user_id[6:]}"
+            _USER_ACCOUNTS[user_id] = {
+                "checking": {"account_number": acct_num, "routing_number": "121000248", "balance": 0.0},
+                "savings": {"account_number": f"TR-SAV-{user_id[6:]}", "routing_number": "121000248", "balance": 0.0}
+            }
+        else:
+            h = hashlib.sha256(user_id.encode()).hexdigest()
+            checking_suffix = str(int(h[:8], 16))[:11].zfill(11)
+            savings_suffix = str(int(h[8:16], 16))[:11].zfill(11)
+            _USER_ACCOUNTS[user_id] = {
+                "checking": {"account_number": f"TR-{checking_suffix}", "routing_number": "121000248", "balance": 12450.84},
+                "savings": {"account_number": f"TR-{savings_suffix}", "routing_number": "121000248", "balance": 45102.10}
+            }
     return _USER_ACCOUNTS[user_id]
 
 def _get_transactions(user_id: str) -> list:
@@ -633,6 +646,49 @@ def get_beneficiaries(payload: EncryptedPayload = Body(...), user = Depends(get_
         return encrypt_response(response_data, cust_session)
     return encrypt_response(blist, cust_session)
 
+def _get_or_create_user_by_account(b_account: str, b_name: str, db: Session) -> str:
+    # 1. First, check if b_account or b_name matches an existing username in the database directly
+    for candidate in [b_account, b_name]:
+        if candidate:
+            u = db.query(User).filter(User.username == candidate).first()
+            if u:
+                return u.username
+
+    # 2. Look up existing users in DB to check matching checking or savings accounts
+    for u in db.query(User).all():
+        acct_info = _get_accounts(u.username)
+        if acct_info["checking"]["account_number"] == b_account or acct_info["savings"]["account_number"] == b_account:
+            return u.username
+
+    # 3. Extract numeric suffix
+    numeric_suffix = re.sub(r'[^0-9]', '', b_account) if b_account else "00000000000"
+    if not numeric_suffix:
+        numeric_suffix = "00000000000"
+    
+    ghost_username = f"ghost_{numeric_suffix}"
+    # Guard if already exists
+    existing = db.query(User).filter(User.username == ghost_username).first()
+    if existing:
+        return existing.username
+
+    # Create ghost user in DB
+    ghost_email = f"ghost_{numeric_suffix}@cbi.com"
+    ghost_phone = f"999{numeric_suffix[:10]}"
+    
+    ghost_user = User(
+        username=ghost_username,
+        email=ghost_email,
+        phone=ghost_phone,
+        password_hash="",
+        email_verified=True,
+        phone_verified=True,
+        is_active=False,
+        is_ghost=True
+    )
+    db.add(ghost_user)
+    db.commit()
+    return ghost_username
+
 @app.post("/customer/transfer")
 def transfer(payload: EncryptedPayload = Body(...), user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
     decrypted_body, cust_session = decrypt_payload(payload, db)
@@ -674,13 +730,18 @@ def transfer(payload: EncryptedPayload = Body(...), user = Depends(get_current_u
         status = "approved"
         msg = "Transfer submitted successfully."
         
-        # Determine beneficiary name
+        # Determine beneficiary name and account
         b_name = "Unknown Transfer"
+        b_account = None
         if beneficiary_id is not None:
             found = next((b for b in _get_beneficiaries(uid) if str(b["id"]) == str(beneficiary_id)), None)
             if found:
                 b_name = found.get("name", "Unknown Transfer")
-                
+                b_account = found.get("account_number")
+        else:
+            b_name = decrypted_body.get("beneficiary_name") or decrypted_body.get("name") or "Unknown Transfer"
+            b_account = decrypted_body.get("account_number")
+            
         # Update checking balance
         user_accounts = _get_accounts(uid)
         user_accounts["checking"]["balance"] -= amount
@@ -695,6 +756,26 @@ def transfer(payload: EncryptedPayload = Body(...), user = Depends(get_current_u
             "type": "debit"
         }
         user_tx.insert(0, new_tx) # Add to the top of the ledger
+
+        # Credit the receiver's account and ledger!
+        if b_account:
+            try:
+                rec_username = _get_or_create_user_by_account(b_account, b_name, db)
+                rec_accounts = _get_accounts(rec_username)
+                rec_accounts["checking"]["balance"] += amount
+                
+                # Append transaction to receiver's ledger
+                rec_tx = _get_transactions(rec_username)
+                new_rec_tx = {
+                    "id": len(rec_tx) + 1,
+                    "date": datetime.datetime.utcnow().isoformat(),
+                    "description": f"Received transfer from {uid}",
+                    "amount": amount,
+                    "type": "credit"
+                }
+                rec_tx.insert(0, new_rec_tx)
+            except Exception as e:
+                print(f"[RECIPIENT CREDIT ERROR] {str(e)}")
     elif eval_result.escalation_level == 2:
         status = "challenged"
         msg = "We need to verify this transfer. A Step-up Verification (OTP) code has been sent to your registered phone."

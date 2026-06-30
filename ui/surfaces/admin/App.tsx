@@ -74,6 +74,18 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'incident' | 'aria' | 'sessions' | 'settings'>('incident');
 
   const [criticalAlert, setCriticalAlert] = useState<any>(null);
+  const [acknowledgedSessionIds, setAcknowledgedSessionIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('acknowledged_sessions');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return [];
+  });
   const [flashingSessionId, setFlashingSessionId] = useState<string | null>(null);
   const prevKeyVersions = useRef<Record<string, number>>({});
 
@@ -137,14 +149,14 @@ export default function App() {
           }
           prevKeyVersions.current[s.session_id] = s.key_version;
         });
-        const contained = sessRes.data.find((s: any) => s.risk_level >= 4 && s.is_active === false);
+        const contained = sessRes.data.find((s: any) => s.risk_level >= 4 && s.is_active === false && !acknowledgedSessionIds.includes(s.session_id));
         setCriticalAlert(contained || null);
       } catch (err) { console.error('Admin fetch failed', err); }
     }
     fetchAdminData();
     const iv = setInterval(fetchAdminData, 6000);
     return () => clearInterval(iv);
-  }, [isAuthenticated, searchUserId, refreshTrigger]);
+  }, [isAuthenticated, searchUserId, refreshTrigger, acknowledgedSessionIds]);
 
   useEffect(() => {
     if (!selectedEventId || !isAuthenticated) return;
@@ -371,7 +383,18 @@ export default function App() {
             <div><span className="text-slate-500">Key:</span> <span className="text-red-600 font-bold">kv{criticalAlert.key_version} (REVOKED)</span></div>
             <div><span className="text-slate-500">Policy:</span> <span className="text-red-600 font-bold">LEVEL 4 CONTAIN</span></div>
           </div>
-          <button onClick={() => setCriticalAlert(null)} className="bg-red-700 hover:bg-red-800 text-white font-bold px-3 py-1.5 rounded-lg text-xs uppercase transition-colors">
+          <button onClick={() => {
+            if (criticalAlert) {
+              setAcknowledgedSessionIds(prev => {
+                const next = [...prev, criticalAlert.session_id];
+                try {
+                  localStorage.setItem('acknowledged_sessions', JSON.stringify(next));
+                } catch (e) {}
+                return next;
+              });
+            }
+            setCriticalAlert(null);
+          }} className="bg-red-700 hover:bg-red-800 text-white font-bold px-3 py-1.5 rounded-lg text-xs uppercase transition-colors">
             Acknowledge
           </button>
         </div>
