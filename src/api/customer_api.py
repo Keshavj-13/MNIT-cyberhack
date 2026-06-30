@@ -689,7 +689,7 @@ def transfer(payload: EncryptedPayload = Body(...), user = Depends(get_current_u
         user_tx = _get_transactions(uid)
         new_tx = {
             "id": len(user_tx) + 1,
-            "date": datetime.utcnow().isoformat(),
+            "date": datetime.datetime.utcnow().isoformat(),
             "description": f"Transfer to {b_name}",
             "amount": -amount,
             "type": "debit"
