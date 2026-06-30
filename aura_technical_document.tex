@@ -7,8 +7,11 @@
 \usepackage{listings}
 \usepackage{tikz}
 \usepackage{pgfplots}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\tcbuselibrary{breakable}
 \pgfplotsset{compat=1.18}
-\usetikzlibrary{shapes,arrows,positioning,calc}
+\usetikzlibrary{shapes,arrows,arrows.meta,positioning,calc,backgrounds,fit}
 
 % Define custom colors matching the Central Bank of India corporate theme
 \definecolor{cbiBlue}{HTML}{003893}
@@ -16,6 +19,8 @@
 \definecolor{cbiDarkBlue}{HTML}{001F5C}
 \definecolor{neutralGray}{HTML}{F8FAFC}
 \definecolor{borderGray}{HTML}{E2E8F0}
+\definecolor{tierGreen}{HTML}{2F855A}
+\definecolor{tierRed}{HTML}{8B0000}
 
 \lstset{
     basicstyle=\ttfamily\small,
@@ -28,6 +33,13 @@
     breaklines=true
 }
 
+\newtcolorbox{threatbox}[1]{
+    colback=cbiBlue!4, colframe=cbiBlue!70!black,
+    fonttitle=\bfseries, title=#1,
+    boxrule=0.8pt, arc=2pt, left=6pt, right=6pt, top=4pt, bottom=4pt,
+    breakable
+}
+
 \title{\textbf{AURA: A Behavioral Biometric Security and Cryptographic Session Isolation Platform for Modern Internet Banking}}
 \author{\textbf{Team MNIT} \\ Central Bank of India Hackathon 2026}
 \date{June 30, 2026}
@@ -37,113 +49,196 @@
 \maketitle
 
 \begin{abstract}
-As credential harvesting, session hijacking, and automated account takeovers (ATO) rise in sophistication, traditional static authentication mechanisms are increasingly inadequate. This paper presents \textbf{AURA}, an intelligent, real-time behavioral biometric security platform designed to protect Central Bank of India's customer portal. AURA integrates high-frequency client-side keyboard and mouse dynamics telemetry with a deep Convolutional Neural Network (\textbf{VarCNN}) running in a server-side inference pipeline. To contain active exploits, the platform implements a multi-tier risk-containment architecture featuring dynamic AES-256 session key rotation (key shuffling), sliding 10-minute active session timers with activity reset, and tab-isolated, header-scoped \texttt{sessionStorage} credential bindings. We demonstrate the practical robustness and real-time responsiveness of our proof-of-concept (POC) implementation.
+A stolen password is no longer the hard part of an account takeover. Credential harvesting kits, session-riding malware, and cookie-replay tooling are commodity products on the underground market, and once an attacker holds a live session token, traditional login-time defenses such as passwords, device fingerprints, and one-time MFA codes have nothing left to check. The fraud has already moved past the door they were guarding. This paper presents \textbf{AURA}, a real-time behavioral biometric security platform built to protect the Central Bank of India's customer portal at the point where most defenses go dark, the authenticated session itself. AURA fuses high-frequency client-side keyboard and mouse dynamics with a deep Convolutional Neural Network, \textbf{VarCNN}, running in a server-side inference pipeline that continuously asks whether the hands on the keyboard still belong to the enrolled customer. When confidence drops, a four-tier containment architecture responds proportionally, rotating AES-256 session keys, tightening transaction limits, sliding session timers on a 10-minute inactivity window, and isolating credentials per browser tab through header-scoped \texttt{sessionStorage} bindings. We describe the architecture, protocol, and data design of our proof-of-concept implementation and demonstrate that VarCNN reaches 98.1\% detection accuracy at the 64-event telemetry buffer size used in production.
 \end{abstract}
 
 \section{Introduction \& Problem Statement}
-Traditional internet banking architectures rely heavily on static checkpoints for access control: username/password combinations, device fingerprints, and multi-factor authentication (MFA) tokens. While effective at the point of authentication, these measures fail to protect the session post-login. Once an attacker successfully steals a session cookie (session hijacking) or compromises a client browser (e.g., via session-riding malware), they inherit full control of the authenticated session.
+Internet banking security has historically been a story about the front door. Username and password combinations, device fingerprints, and multi-factor authentication tokens all answer one question, and only one question: is this the right person logging in right now. They are silent for the rest of the session. Once an attacker steals a customer's session cookie or compromises their browser through session-riding malware, they inherit everything the legitimate user could do, and no checkpoint downstream is watching for the switch.
 
-Furthermore, conventional banking websites use browser-wide cookies for session token persistence. When a user opens multiple tabs, the browser automatically attaches the same session cookie to all outgoing requests. This cross-tab cookie inheritance creates a severe security vulnerability, enabling malicious scripts on third-party tabs to execute Cross-Site Request Forgery (CSRF) or session-hijacking attacks.
+\begin{threatbox}{Threat Scenario}
+A customer's laptop is infected with an infostealer that exfiltrates browser cookies. Hours later, on the other side of the country, an attacker loads the stolen session cookie into their own browser and lands directly inside the customer's authenticated banking dashboard, no password, no OTP, no fingerprint check required. Every static defense the bank deployed at login has already done its job and stepped aside. From this point forward, only behavior can tell the two users apart.
+\end{threatbox}
 
-To address these vulnerabilities, the Central Bank of India requires a system that:
+A second, quieter vulnerability compounds the first. Conventional banking portals rely on browser-wide cookies for session persistence, and the browser dutifully attaches that cookie to every outgoing request from every open tab. A malicious script running in one tab inherits the authenticated session of every other tab the moment it makes a request, opening the door to Cross-Site Request Forgery and tab-level session hijacking without ever touching the original credentials.
+
+Taken together, these gaps define what the Central Bank of India needs from a session-layer defense. The system must:
 \begin{enumerate}
-    \item \textbf{Continuously verifies identity} post-login using implicit behavioral cues (typing tempo, mouse movement velocities).
-    \item \textbf{Isolates session credentials} across tabs to prevent cross-contamination.
-    \item \textbf{Minimizes window of exposure} for inactive sessions while respecting user experience.
-    \item \textbf{Enforces real-time threat containment} without relying on permanent account locking, utilizing graceful verification steps.
+    \item \textbf{Continuously verify identity} after login, using implicit behavioral signals such as typing tempo and mouse movement velocity that an attacker cannot simply copy alongside a stolen cookie.
+    \item \textbf{Isolate session credentials} across browser tabs so that compromise in one tab cannot silently propagate to another.
+    \item \textbf{Minimize the window of exposure} for sessions left idle, without punishing customers who are actively, if slowly, working through a transaction.
+    \item \textbf{Contain threats in real time} through graduated verification rather than blunt, permanent account locking that turns every false alarm into a support ticket.
 \end{enumerate}
 
 \section{Proposed Solution}
-We present \textbf{AURA}, a real-time behavioral biometric and cryptographic session isolation platform. The platform operates on a four-tier risk containment architecture:
+AURA answers each of these requirements with a single design principle: trust is not binary, and neither is the bank's response to losing it. Every authenticated session carries a continuously updated risk score between 0 and 1, and that score drives a four-tier containment architecture that escalates enforcement smoothly rather than snapping from "trusted" to "locked out."
+
 \begin{itemize}
-    \item \textbf{Tier 1 (Protected)}: Risk Score $< 0.40$. The user is verified as legitimate. Standard transactions are permitted, and all API communications are encrypted using a negotiated AES-GCM session key (Key Version 1).
-    \item \textbf{Tier 2 (Monitoring)}: $0.40 \le \text{Risk Score} < 0.70$. Minor behavioral anomalies detected. The system silently prompts a step-up OTP challenge to verify identity while keeping the user interface active.
-    \item \textbf{Tier 3 (Restricted)}: $0.70 \le \text{Risk Score} < 0.90$. High threat of account takeover. AURA restricts transaction limits, shuffles the session keys, and requires physical step-up verification.
-    \item \textbf{Tier 4 (Contained)}: Risk Score $\ge 0.90$. Critical threat. The session is immediately deactivated (\texttt{is\_active = False}). Access to standard banking APIs is terminated. The user is redirected to a cryptographic recovery screen where they must provide an OTP and answer coordinates from their physical/downloaded \textbf{Cryptographic Recovery Card} to reset their session.
+    \item \textbf{Tier 1, Protected} (risk score below 0.40). Behavior matches the enrolled profile. Standard transactions proceed, and every API call is encrypted under the currently negotiated AES-GCM session key.
+    \item \textbf{Tier 2, Monitoring} (0.40 to 0.70). Minor behavioral drift is detected. AURA silently inserts a step-up OTP challenge without disrupting the interface the customer is already using.
+    \item \textbf{Tier 3, Restricted} (0.70 to 0.90). The behavioral fingerprint diverges enough to suggest a likely account takeover in progress. Transaction limits tighten, the session key is rotated mid-session, and a physical step-up verification is required before any further high-risk action.
+    \item \textbf{Tier 4, Contained} (0.90 and above). The system treats the session as compromised and deactivates it immediately, \texttt{is\_active = False}, cutting access to every banking API. Recovery requires an OTP plus coordinates from the customer's physical or downloaded \textbf{Cryptographic Recovery Card}, an out-of-band channel an attacker holding only the session cookie cannot satisfy.
 \end{itemize}
 
+Fig.~\ref{fig:tiers} maps this spectrum visually, showing how a single continuous score translates into four distinct, increasingly assertive responses.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[font=\small]
+\def\w{14}
+\def\h{1.2}
+\def\xa{0.40*\w}
+\def\xb{0.70*\w}
+\def\xc{0.90*\w}
+
+\fill[tierGreen] (0,0) rectangle (\xa,\h);
+\fill[yellow!70!orange!85!white] (\xa,0) rectangle (\xb,\h);
+\fill[orange!85!red] (\xb,0) rectangle (\xc,\h);
+\fill[tierRed] (\xc,0) rectangle (\w,\h);
+
+\draw[draw=cbiDarkBlue, line width=1pt] (0,0) rectangle (\w,\h);
+\foreach \x in {0,\xa,\xb,\xc,\w} {\draw[draw=cbiDarkBlue] (\x,0) -- (\x,\h);}
+
+\node[white, font=\bfseries\scriptsize, align=center] at ({0.5*\xa},{0.72*\h}) {Tier 1\\\footnotesize Protected};
+\node[black, font=\bfseries\scriptsize, align=center] at ({0.5*(\xa+\xb)},{0.72*\h}) {Tier 2\\\footnotesize Monitoring};
+\node[white, font=\bfseries\scriptsize, align=center] at ({0.5*(\xb+\xc)},{0.72*\h}) {Tier 3\\\scriptsize Restricted};
+\node[white, font=\bfseries\tiny, align=center] at ({0.5*(\xc+\w)},{0.72*\h}) {Tier 4\\\tiny Contained};
+
+\foreach \x/\lab in {0/0.00,\xa/0.40,\xb/0.70,\xc/0.90,\w/1.00} {
+  \draw[draw=cbiDarkBlue] (\x,0) -- (\x,-0.12);
+  \node[below, font=\scriptsize] at (\x,-0.12) {\lab};
+}
+\node[below, font=\scriptsize, align=center] at (\w/2,-0.6) {Behavioral Risk Score};
+
+\node[above, font=\scriptsize, align=center, text width=2.6cm] at ({0.5*\xa},\h+0.55) {Full access\\$K_{v1}$ encryption};
+\node[above, font=\scriptsize, align=center, text width=2.6cm] at ({0.5*(\xa+\xb)},\h+0.55) {Silent\\step-up OTP};
+\node[above, font=\scriptsize, align=center, text width=2.6cm] at ({0.5*(\xb+\xc)},\h+0.55) {Limits cut,\\key shuffled};
+\node[above, font=\scriptsize, align=center, text width=2.6cm] at ({0.5*(\xc+\w)},\h+0.55) {Session killed,\\recovery card};
+\foreach \x in {0.5*\xa,0.5*(\xa+\xb),0.5*(\xb+\xc),0.5*(\xc+\w)} {
+  \draw[->, draw=cbiDarkBlue!70] ({\x},\h+0.4) -- ({\x},\h+0.05);
+}
+\end{tikzpicture}
+\caption{The four-tier risk containment spectrum, mapping a continuous behavioral risk score to a graduated enforcement action.}
+\label{fig:tiers}
+\end{figure}
+
 \section{System Architecture}
-The system architecture of AURA consists of three major planes: the Client Telemetry Plane, the API Gateway \& Session Cryptography Plane, and the AI/ML Decision Engine. Fig.~\ref{fig:architecture} illustrates the block diagram of the system.
+AURA's architecture is organized into three cooperating planes, sketched in Fig.~\ref{fig:architecture}: a Client Telemetry Plane that observes the customer without interrupting them, an API Gateway and Session Cryptography Plane that mediates every request and owns the keys, and an AI/ML Decision Engine that turns raw behavior into a risk score. The three planes share one feedback loop. Telemetry flows in from the browser, a risk score flows out of the model, and that score immediately reshapes how the gateway treats the next request, including, when necessary, retiring the very key the client just used to encrypt it.
 
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}[
-    node distance=1.5cm,
-    block/.style={draw=cbiBlue, fill=white, rectangle, minimum width=2.5cm, minimum height=1cm, align=center, rounded corners=4px, line width=1.2pt},
-    database/.style={draw=cbiDarkBlue, fill=white, cylinder, shape border rotate=90, minimum width=2cm, minimum height=1.5cm, align=center, line width=1.2pt},
-    arrow/.style={-latex', thick, draw=cbiBlue, line width=1.2pt}
+    >={Latex[length=2.2mm,width=1.6mm]},
+    block/.style={draw=cbiBlue, very thick, fill=cbiBlue!6, rectangle, rounded corners=3pt, minimum width=3.1cm, minimum height=1.15cm, align=center, font=\small},
+    aiblock/.style={draw=cbiOrange, very thick, fill=cbiOrange!8, rectangle, rounded corners=3pt, minimum width=3.1cm, minimum height=1.15cm, align=center, font=\small},
+    dbblock/.style={draw=cbiDarkBlue, very thick, fill=cbiDarkBlue!8, rectangle, rounded corners=3pt, minimum width=3.1cm, minimum height=1.0cm, align=center, font=\small},
+    lbl/.style={font=\scriptsize, align=center, fill=white, inner sep=1pt},
+    arr/.style={->, draw=cbiBlue!80!black, line width=1pt}
 ]
-    % Nodes
-    \node[block] (client) {\textbf{Client Browser} \\ (Telemetry Collector)};
-    \node[block, right=2cm of client] (gateway) {\textbf{API Gateway} \\ (FastAPI / Auth)};
-    \node[block, right=2cm of gateway] (model) {\textbf{BEACON AI} \\ (VarCNN Model)};
-    \node[database, below=1.5cm of gateway] (db) {\textbf{SQLite DB} \\ (Sessions \& Telemetry)};
-    
-    % Connections
-    \draw[arrow] (client) -- node[above, font=\scriptsize] {Encrypted Telemetry} (gateway);
-    \draw[arrow] (gateway) -- node[above, font=\scriptsize] {Feature Tensors} (model);
-    \draw[arrow] (model.south) |- node[right, pos=0.8, font=\scriptsize] {Risk Score} (db.east);
-    \draw[arrow] (gateway) -- (db);
-    \draw[arrow] ($(db.west)$) -| node[left, pos=0.8, font=\scriptsize] {Key Rotation} (client.south);
+\node[block] (client) {\textbf{Client Browser}\\\footnotesize Telemetry Collector};
+\node[block, right=3.3cm of client] (gateway) {\textbf{API Gateway}\\\footnotesize FastAPI Auth Layer};
+\node[aiblock, right=3.3cm of gateway] (model) {\textbf{BEACON AI}\\\footnotesize VarCNN Inference};
+\node[dbblock, below=1.8cm of gateway] (db) {\textbf{SQLite}\\\footnotesize Sessions and Telemetry};
+
+\draw[arr] (client) -- node[lbl, pos=0.5] {Encrypted\\Telemetry} (gateway);
+\draw[arr] (gateway) -- node[lbl, pos=0.5] {Feature\\Tensors} (model);
+\draw[arr] (model.south) |- node[pos=0.85, lbl, above]{Risk Score} (db.east);
+\draw[arr] (gateway) -- node[midway, lbl, right]{Session\\State} (db);
+\draw[arr] (db.west) -| node[pos=0.5, lbl, left]{Key\\Rotation} (client.south);
+
+\begin{scope}[on background layer]
+\node[draw=cbiBlue!40, dashed, rounded corners=8pt, fill=cbiBlue!3, fit=(client), inner sep=14pt, label={[font=\scriptsize\bfseries, text=cbiBlue, yshift=-2pt]above:Client Telemetry Plane}] {};
+\node[draw=cbiDarkBlue!40, dashed, rounded corners=8pt, fill=cbiDarkBlue!3, fit=(gateway)(db), inner sep=14pt, label={[font=\scriptsize\bfseries, text=cbiDarkBlue, yshift=-2pt]above:API Gateway and Session Cryptography Plane}] {};
+\node[draw=cbiOrange!50, dashed, rounded corners=8pt, fill=cbiOrange!4, fit=(model), inner sep=14pt, label={[font=\scriptsize\bfseries, text=cbiOrange!80!black, yshift=-2pt]above:AI/ML Decision Engine}] {};
+\end{scope}
 \end{tikzpicture}
-\caption{AURA System Architecture and Feedback Loop.}
+\caption{AURA System Architecture and Feedback Loop. Telemetry flows left to right into a risk score, and that score flows back left as a key rotation signal.}
 \label{fig:architecture}
 \end{figure}
 
 \section{Technology Stack}
-AURA leverages a lightweight, high-performance, and modular technology stack:
-\begin{itemize}
-    \item \textbf{Backend Framework}: \textbf{FastAPI} (Python 3.10+). Chosen for its native asynchronous request handling, high throughput, and automatic OpenAPI schema generation.
-    \item \textbf{Database Layer}: \textbf{SQLite3} with \textbf{SQLAlchemy ORM}. Used to maintain session records, transaction histories, and event-level telemetry logs.
-    \item \textbf{Frontend UI}: \textbf{React 18} and \textbf{Vite} compilation server. Provides an extremely responsive, client-side routed UI. Styled using vanilla TailwindCSS to match the corporate Central Bank of India visual identity.
-    \item \textbf{Deep Learning Engine}: \textbf{PyTorch 2.1}. Run on the server to execute real-time inference using pre-loaded VarCNN behavior-prediction weights.
-\end{itemize}
+AURA's stack was chosen for one practical reason ahead of any other, every component had to run in real time without becoming the bottleneck the security model depends on.
+
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{p{3.1cm}p{3.3cm}p{7.8cm}}
+\hline
+
+\textbf{Layer} & \textbf{Technology} & \textbf{Why it earns its place} \\
+\hline
+Backend Framework & FastAPI (Python 3.10+) & Native asynchronous request handling keeps telemetry ingestion non-blocking, with automatic OpenAPI schema generation for free. \\
+Database Layer & SQLite3 + SQLAlchemy ORM & Lightweight enough for a hackathon POC while still modeling session records, transaction histories, and event-level telemetry logs relationally. \\
+Frontend UI & React 18 + Vite & Sub-second hot reload and client-side routing keep the telemetry collector responsive; styled in vanilla TailwindCSS to match the Central Bank of India visual identity. \\
+Deep Learning Engine & PyTorch 2.1 & Runs VarCNN inference server-side against pre-loaded behavior-prediction weights, fast enough to score a session before a transfer completes. \\
+\hline
+\end{tabular}
+\caption{AURA Technology Stack}
+\label{tab:stack}
+\end{table}
 
 \section{Workflow \& Protocol Handshake}
-When a user interacts with the application, high-frequency telemetry (keys pressed, mouse locations) is collected client-side. The protocol sequence is as follows:
+Behavioral telemetry, keystrokes and mouse positions, is captured client-side at high frequency and never sent raw or unencrypted. The protocol sequence runs as follows.
 \begin{enumerate}
-    \item Telemetry events are accumulated in a local buffer. Once the buffer holds 64 events, it is encrypted using the current session key and sent to the \texttt{/customer/telemetry} endpoint.
-    \item The backend decrypts the payload and stores it in the database.
-    \item When the user attempts a high-risk operation (such as adding a recipient or transferring funds), the system fetches recent telemetry and runs the VarCNN model.
-    \item If the threat score escalates, the backend automatically triggers key rotation. The response is encrypted using the \emph{old} key but contains the \emph{new} session key and key version. The client decrypts the response, updates its session state, and signs all subsequent requests with the rotated key.
+    \item Telemetry events accumulate in a local buffer. Once it holds 64 events, the buffer is encrypted under the current session key and shipped to the \texttt{/customer/telemetry} endpoint.
+    \item The backend decrypts the payload and persists it.
+    \item When the customer attempts a high-risk operation, such as adding a recipient or transferring funds, the system pulls recent telemetry and runs it through VarCNN.
+    \item If the resulting threat score escalates the session's tier, the backend triggers key rotation inline. The response carrying the verdict is itself encrypted under the \emph{old} key, but its payload contains the \emph{new} session key and key version. The client decrypts that response, adopts the new key, and signs every subsequent request with it.
 \end{enumerate}
 
-Fig.~\ref{fig:handshake} illustrates this cryptographic key rotation handshake.
+This last step is the part worth dwelling on. The rotation hands the client a new key using a channel encrypted with the key it is about to retire, so even a passive observer who is logging encrypted traffic learns nothing about $K_{v2}$ before the legitimate client does. Fig.~\ref{fig:handshake} traces the full handshake.
 
 \begin{figure}[htbp]
 \centering
-\begin{tikzpicture}[node distance=2.5cm, auto, >=latex', line width=1pt]
-    \node (client) {\textbf{Client App}};
-    \node (server) [right=6cm of client] {\textbf{FastAPI Server}};
-    
-    \draw (client) -- (client |- 0,-4.5);
-    \draw (server) -- (server |- 0,-4.5);
-    
-    \draw[->] (0,-1) -- node[above, font=\scriptsize] {Transfer request (Encrypted with $K_{v1}$)} (6,-1);
-    \node at (6, -1.8) [left, align=left, font=\scriptsize] {Inference: Risk Escalation $\to 3$ \\ Shuffle Key: $K_{v2} = H(K_{v1} \parallel \text{salt})$};
-    \draw[<-] (0,-2.5) -- node[above, font=\scriptsize] {Encrypted Response (with $K_{v1}$) + $K_{v2}$} (6,-2.5);
-    \node at (0, -3.2) [right, align=left, font=\scriptsize] {Client Decrypts, stores $K_{v2}$ \\ Rotates Session Key to Version 2};
-    \draw[->] (0,-4) -- node[above, font=\scriptsize] {Subsequent requests (Encrypted with $K_{v2}$)} (6,-4);
+\begin{tikzpicture}[
+  >={Latex[length=2.2mm,width=1.6mm]},
+  actor/.style={font=\bfseries\small},
+  msg/.style={font=\scriptsize},
+  note/.style={fill=cbiBlue!6, draw=cbiBlue!50, rounded corners=2pt, font=\scriptsize, align=left, inner sep=5pt}
+]
+\def\lx{0}
+\def\rx{8.6}
+
+\node[actor] (clientlabel) at (\lx,0) {Client App};
+\node[actor] (serverlabel) at (\rx,0) {FastAPI Server};
+\coordinate (L) at (\lx,0);
+\coordinate (R) at (\rx,0);
+\draw[dashed, gray] (\lx,-0.35) -- (\lx,-7.0);
+\draw[dashed, gray] (\rx,-0.35) -- (\rx,-7.0);
+
+\draw[->, cbiBlue, very thick] (\lx,-1.0) -- node[msg, above]{\textcircled{\scriptsize 1} Transfer request, encrypted with $K_{v1}$} (\rx,-1.0);
+
+\node[note, text width=7.6cm] at ($(L)!0.5!(R)+(0,-2.1)$) {\textbf{Server-side inference.} VarCNN flags anomalous dynamics and escalates risk to Tier 3. Server derives $K_{v2} = H(K_{v1} \,\|\, \text{salt})$.};
+
+\draw[<-, cbiOrange, very thick] (\lx,-3.3) -- node[msg, above]{\textcircled{\scriptsize 2} Response (encrypted with $K_{v1}$) carries $K_{v2}$} (\rx,-3.3);
+
+\node[note, text width=7.6cm] at ($(L)!0.5!(R)+(0,-4.4)$) {\textbf{Client-side rotation.} Payload is decrypted, $K_{v2}$ is persisted, local key version advances to 2.};
+
+\draw[->, cbiBlue, very thick] (\lx,-5.6) -- node[msg, above]{\textcircled{\scriptsize 3} Subsequent requests, encrypted with $K_{v2}$} (\rx,-5.6);
+
+\node[draw=gray, fill=white] at (\lx,-7.0) {};
+\node[draw=gray, fill=white] at (\rx,-7.0) {};
 \end{tikzpicture}
-\caption{Cryptographic Session Key Rotation Protocol.}
+\caption{Cryptographic Session Key Rotation Protocol. The new key rides inside a response still encrypted under the old one.}
 \label{fig:handshake}
 \end{figure}
 
 \section{Database Design}
-The database schema consists of three primary entities: the \texttt{users} table, the \texttt{customer\_sessions} table, and the \texttt{telemetry\_data} table. These are implemented as follows:
+Three tables carry the full state AURA needs to reason about a session: \texttt{users} for identity and recovery material, \texttt{customer\_sessions} for the live cryptographic and risk state of each session, and \texttt{telemetry\_data} for the raw behavioral signal that feeds VarCNN. Table~\ref{tab:schema} specifies the schema.
+
 
 \begin{table}[htbp]
 \centering
 \caption{Database Schema Specifications}
 \label{tab:schema}
-\begin{tabular}{llll}
+\begin{tabular}{lp{3.3cm}p{2.6cm}p{5.3cm}}
 \hline
+
 \textbf{Table} & \textbf{Column} & \textbf{Type} & \textbf{Description} \\
 \hline
 \texttt{users} & \texttt{id} & INTEGER (PK) & Unique primary key \\
                & \texttt{username} & VARCHAR(50) & Unique login credential \\
                & \texttt{password\_hash} & VARCHAR(256) & Passlib PBKDF2 hash \\
-               & \texttt{recovery\_card\_data} & JSON & 6 $\times$ 6 grid of random digits (A1-F6) \\
+               & \texttt{recovery\_card\_data} & JSON & 6 $\times$ 6 grid of random digits (A1\textendash F6) \\
 \hline
 \texttt{customer\_sessions} & \texttt{session\_id} & VARCHAR(64) & Unique session string \\
                & \texttt{username} & VARCHAR(50) & Owner of the session \\
@@ -154,82 +249,110 @@ The database schema consists of three primary entities: the \texttt{users} table
 \hline
 \texttt{telemetry\_data} & \texttt{id} & INTEGER (PK) & Unique primary key \\
                & \texttt{session\_id} & VARCHAR(64) & Foreign key mapping to session \\
-               & \texttt{type} & VARCHAR(20) & Event type: \texttt{keydown}, \texttt{mousemove} \\
+               & \texttt{type} & VARCHAR(20) & Event type, \texttt{keydown} or \texttt{mousemove} \\
                & \texttt{timestamp} & DATETIME & Client event occurrence time \\
 \hline
 \end{tabular}
 \end{table}
 
 \section{AI/ML Model (VarCNN)}
-At the heart of the behavioral detection engine is the \textbf{VarCNN} model. The model processes continuous typing and mouse dynamics using two input vectors:
+VarCNN is the part of AURA that has to answer a deceptively hard question continuously and silently, namely whether the person typing right now still moves like the person who enrolled. It works from two complementary input vectors.
 \begin{itemize}
-    \item \textbf{Timing Sequence}: A $1 \times 1 \times 1024$ tensor representing the time intervals (inter-event times) between successive actions. 
-    \item \textbf{Metadata Vector}: A $1 \times 10$ tensor representing statistical summaries of mouse dynamics, such as mean velocity, mouse acceleration, and click frequencies.
+    \item \textbf{Timing Sequence}: a $1 \times 1 \times 1024$ tensor of inter-event time intervals, capturing the rhythm of typing and clicking rather than its content.
+    \item \textbf{Metadata Vector}: a $1 \times 10$ tensor of statistical summaries of mouse dynamics, including mean velocity, acceleration, and click frequency.
 \end{itemize}
 
-During inference, the model passes the timing sequence through five 1D convolutional layers, followed by a Global Average Pooling (\textbf{GAP}) layer. The resulting 512-dimensional behavioral embedding is compared to the user's enrolled profile using cosine similarity. If the similarity drops below a predefined threshold, the risk score is incremented.
+The timing sequence passes through five 1D convolutional layers, then a Global Average Pooling layer collapses the result into a 512-dimensional behavioral embedding. That embedding is compared to the customer's enrolled profile by cosine similarity, and the risk score climbs whenever the similarity drops below a calibrated threshold, exactly the kind of subtle drift a stolen cookie cannot fake.
 
-Fig.~\ref{fig:accuracy} shows the native plot of the detection rate as a function of the telemetry event sequence length, demonstrating the model's accuracy.
+Buffer size is the main lever on detection quality, and Fig.~\ref{fig:accuracy} shows why AURA settled on 64 events rather than going smaller for speed or larger for confidence.
 
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}
 \begin{axis}[
-    title={Model Accuracy vs. Sequence Length},
-    xlabel={Telemetry Event Count},
+    title={\textbf{VarCNN Detection Accuracy vs. Telemetry Buffer Size}},
+    xlabel={Telemetry Event Count in Buffer},
     ylabel={Detection Accuracy (\%)},
     xmin=0, xmax=128,
-    ymin=50, ymax=100,
+    ymin=45, ymax=100,
     xtick={0,16,32,48,64,80,96,112,128},
     ytick={50,60,70,80,90,100},
-    legend pos=south east,
     ymajorgrids=true,
-    grid style=dashed,
-    width=10cm,
-    height=6cm
+    grid style={dashed, gray!30},
+    width=13cm,
+    height=7cm,
+    axis lines=left,
+    tick label style={font=\scriptsize},
+    label style={font=\small},
+    title style={font=\small}
 ]
 \addplot[
     color=cbiBlue,
-    mark=square,
-    line width=1.5pt
-    ]
-    coordinates {
-    (0,50.2)(16,68.4)(32,82.1)(48,93.5)(64,98.1)(80,98.8)(96,99.2)(112,99.5)(128,99.7)
+    mark=square*,
+    mark size=1.8pt,
+    line width=1.6pt,
+    fill=cbiBlue,
+    fill opacity=0.08
+    ] table[row sep=\\] {
+    x y \\
+    0 50.2 \\
+    16 68.4 \\
+    32 82.1 \\
+    48 93.5 \\
+    64 98.1 \\
+    80 98.8 \\
+    96 99.2 \\
+    112 99.5 \\
+    128 99.7 \\
     };
-\legend{VarCNN Accuracy}
+
+\draw[draw=cbiOrange, densely dotted, line width=1.2pt] (axis cs:64,45) -- (axis cs:64,98.1);
+\node[circle, fill=cbiOrange, inner sep=1.6pt] at (axis cs:64,98.1) {};
+\node[font=\scriptsize, align=center, fill=white, draw=cbiOrange, rounded corners=1pt, inner sep=3pt] at (axis cs:64,60) {Deployed buffer\\size: 64 events\\$\rightarrow$ 98.1\% accuracy};
 \end{axis}
 \end{tikzpicture}
-\caption{Model accuracy stabilizes above 98\% when the event buffer size exceeds 64 events.}
+\caption{Detection accuracy as a function of telemetry buffer size. Accuracy crosses 98\% once the buffer reaches 64 events, the size AURA uses in production, after which additional buffering yields diminishing returns.}
 \label{fig:accuracy}
 \end{figure}
 
 \section{Security Measures}
-AURA implements several industry-leading security practices to isolate sessions and protect customers:
-\begin{itemize}
-    \item \textbf{Tab Isolation}: Traditional cookie-based auth is replaced by standard Bearer token validation. Tokens are stored only in \texttt{sessionStorage}, which does not share data across browser tabs. This isolates each tab's session state.
-    \item \textbf{Active Sliding Timer}: Inactive sessions are signed out automatically after 10 minutes of inactivity. To prevent disruptive logouts during active work, mouse movements, clicks, and key presses reset the timer.
-    \item \textbf{Cryptographic Recovery Card}: When a user triggers Tier 4 containment, their session is deactivated. Reactivation requires an OTP and coordinates from their downloaded 6 $\times$ 6 recovery card, providing robust out-of-band verification.
-\end{itemize}
+
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{p{3.6cm}p{10.6cm}}
+\hline
+
+\textbf{Measure} & \textbf{How it protects the session} \\
+\hline
+Tab Isolation & Cookie-based auth is replaced with Bearer tokens stored only in \texttt{sessionStorage}, which browsers never share across tabs. A compromised tab stays a compromised tab, instead of becoming a compromised account. \\
+Active Sliding Timer & Idle sessions sign out automatically after 10 minutes. Mouse movement, clicks, and key presses reset the clock, so the timer punishes abandonment, not deliberation. \\
+Cryptographic Recovery Card & Tier 4 containment deactivates the session outright. Reactivation demands an OTP plus coordinates from a downloaded 6 $\times$ 6 recovery card, an out-of-band secret a remote attacker holding only a stolen session token never possesses. \\
+\hline
+\end{tabular}
+\caption{AURA Security Measures}
+\label{tab:security}
+\end{table}
 
 \section{Scalability, Limitations, \& Future Enhancements}
-While AURA is a powerful behavioral protection platform, we must note its assumptions, limitations, and future scalability paths.
+A proof of concept earns its credibility partly by being honest about where it still falls short. We see three areas that matter most before AURA could move beyond a hackathon build.
 
 \subsection{Assumptions}
-The system assumes that the client's browser supports modern Web APIs (such as the standard Crypto Web API for local GCM decryption) and that mouse/keyboard telemetry is captured with millisecond precision.
+AURA assumes the client's browser supports modern Web APIs, specifically the standard Crypto Web API for local AES-GCM decryption, and that keyboard and mouse telemetry can be captured with millisecond precision. Both hold comfortably for current desktop browsers.
 
 \subsection{Limitations}
 \begin{itemize}
-    \item \textbf{Device Variation}: The VarCNN behavioral profile differs when a user switches from a desktop to a mobile device. Separate enrollments are needed for touch vs. mouse devices.
-    \item \textbf{Cold Start}: When a user is newly registered, the system has no behavioral history. A temporary training period of 10 transactions is assumed where the system defaults to monitoring (Tier 2).
+    \item \textbf{Device Variation}: a behavioral profile built on a desktop does not transfer to a touchscreen. Switching devices requires a separate enrollment, since mouse dynamics and touch dynamics are not the same signal wearing different clothes.
+    \item \textbf{Cold Start}: a newly registered customer has no behavioral history to compare against. AURA defaults new accounts to Tier 2 monitoring for a 10-transaction training period until a reliable profile exists.
 \end{itemize}
 
 \subsection{Future Enhancements}
 \begin{itemize}
-    \item \textbf{Federated Learning}: Perform local model training updates on the client-side browser to avoid transmitting raw keystroke timings, improving privacy.
-    \item \textbf{Mobile Sensor Integration}: Extend behavioral telemetry to gyroscope, accelerometer, and pressure sensor readings on mobile banking apps.
+    \item \textbf{Federated Learning}: train model updates locally in the browser rather than transmitting raw keystroke timing data to the server, narrowing what ever has to leave the customer's device.
+    \item \textbf{Mobile Sensor Integration}: extend the behavioral signal to gyroscope, accelerometer, and pressure readings, sensors a mobile banking app has access to that a desktop browser never will.
 \end{itemize}
 
 \section{Conclusion}
-AURA demonstrates a next-generation security paradigm for the Central Bank of India. By combining real-time behavioral biometric monitoring with dynamic session key rotation and tab-isolated storage, AURA successfully mitigates session hijacking and credential compromises. Our implementation proves that security can be enhanced without sacrificing user experience.
+AURA treats the authenticated session as the asset worth defending, not just the login screen in front of it. Behavioral biometrics catch what static checkpoints structurally cannot see, dynamic key rotation makes a stolen session key a depreciating asset rather than a permanent one, and tab-isolated storage stops one compromised tab from becoming an entire compromised account. The result is a security posture that escalates with evidence instead of jumping straight to a lockout, which is, in the end, the difference between a bank that merely reacts to fraud and one that contains it as it happens.
 
 \end{document}
