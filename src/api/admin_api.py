@@ -128,9 +128,19 @@ def get_session_live(session_id: str, db: Session = Depends(get_db), admin = Dep
     telemetry_rows = db.query(TelemetryData).filter(
         TelemetryData.session_id == session_id
     ).order_by(TelemetryData.id.desc()).limit(20).all()
-    telemetry = [{"id": t.id, "type": t.type, "data": t.data,
-                  "timestamp": t.timestamp.isoformat() if t.timestamp else None}
-                 for t in reversed(telemetry_rows)]
+    import json
+    telemetry = []
+    for t in reversed(telemetry_rows):
+        t_data = t.data
+        if isinstance(t_data, str):
+            try:
+                t_data = json.loads(t_data)
+            except Exception:
+                pass
+        telemetry.append({
+            "id": t.id, "type": t.type, "data": t_data,
+            "timestamp": t.timestamp.isoformat() if t.timestamp else None
+        })
 
     # Latest security event
     latest_event = db.query(SecurityEvent).filter(
@@ -148,7 +158,14 @@ def get_session_live(session_id: str, db: Session = Depends(get_db), admin = Dep
                 ts_val = int(t.timestamp.replace(tzinfo=datetime.timezone.utc).timestamp() * 1000)
             except Exception:
                 pass
-        events_list.append({"type": t.type, "data": t.data, "timestamp": ts_val})
+        t_data = t.data
+        if isinstance(t_data, str):
+            try:
+                import json
+                t_data = json.loads(t_data)
+            except Exception:
+                pass
+        events_list.append({"type": t.type, "data": t_data, "timestamp": ts_val})
     features = FeatureExtractor().extract_features(events_list)
 
     return {
