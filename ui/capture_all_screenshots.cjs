@@ -31,6 +31,13 @@ async function main() {
   const pageAttacker = await context.newPage();
   try {
     await pageAttacker.goto('http://localhost:3003', { waitUntil: 'networkidle', timeout: 10000 });
+    
+    // Perform login
+    await pageAttacker.fill('input[placeholder="attacker"]', 'attacker');
+    await pageAttacker.fill('input[type="password"]', 'attack123');
+    await pageAttacker.click('button[type="submit"]');
+    await pageAttacker.waitForTimeout(3000); // Wait for transition
+
     await pageAttacker.screenshot({ path: path.join(screenshotsDir, 'attacker_dashboard.png') });
     console.log("Saved attacker_dashboard.png");
   } catch (err) {
