@@ -525,17 +525,31 @@ def me(user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
     }
 
 # Mock Database for Banking Details
-MOCK_ACCOUNTS = {
+_DEFAULT_ACCOUNTS = {
     "checking": {"account_number": "TR-98234827493", "routing_number": "121000248", "balance": 12450.84},
     "savings": {"account_number": "TR-10293847562", "routing_number": "121000248", "balance": 45102.10}
 }
 
-MOCK_TRANSACTIONS = [
+_DEFAULT_TRANSACTIONS = [
     {"id": 1, "date": "2026-06-15T10:30:00", "description": "Grocery Store Checkout", "amount": -78.45, "type": "debit"},
     {"id": 2, "date": "2026-06-14T08:15:00", "description": "Monthly Salary Deposit", "amount": 3500.00, "type": "credit"},
     {"id": 3, "date": "2026-06-12T14:45:00", "description": "Electricity Utility Bill", "amount": -120.00, "type": "debit"},
     {"id": 4, "date": "2026-06-10T19:00:00", "description": "Online Bookstore Payment", "amount": -42.10, "type": "debit"},
 ]
+
+import copy
+_USER_ACCOUNTS: Dict[str, dict] = {}
+_USER_TRANSACTIONS: Dict[str, list] = {}
+
+def _get_accounts(user_id: str) -> dict:
+    if user_id not in _USER_ACCOUNTS:
+        _USER_ACCOUNTS[user_id] = copy.deepcopy(_DEFAULT_ACCOUNTS)
+    return _USER_ACCOUNTS[user_id]
+
+def _get_transactions(user_id: str) -> list:
+    if user_id not in _USER_TRANSACTIONS:
+        _USER_TRANSACTIONS[user_id] = list(_DEFAULT_TRANSACTIONS)
+    return _USER_TRANSACTIONS[user_id]
 
 # ponytail: per-user lists, no DB table needed for mock data
 _DEFAULT_BENEFICIARIES = [
@@ -553,16 +567,18 @@ def _get_beneficiaries(user_id: str) -> list:
 def get_account_details(payload: EncryptedPayload = Body(...), user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
     # Decrypt request parameters (none expected, but verify crypto)
     _, cust_session = decrypt_payload(payload, db)
+    uid = user.get("sub", "")
     
     # Return encrypted accounts data
-    return encrypt_response(MOCK_ACCOUNTS, cust_session)
+    return encrypt_response(_get_accounts(uid), cust_session)
 
 @app.post("/customer/statements")
 def get_statements(payload: EncryptedPayload = Body(...), user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
     _, cust_session = decrypt_payload(payload, db)
+    uid = user.get("sub", "")
     
     # Return encrypted transactions
-    return encrypt_response(MOCK_TRANSACTIONS, cust_session)
+    return encrypt_response(_get_transactions(uid), cust_session)
 
 @app.post("/customer/beneficiaries")
 def get_beneficiaries(payload: EncryptedPayload = Body(...), user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
@@ -657,8 +673,28 @@ def transfer(payload: EncryptedPayload = Body(...), user = Depends(get_current_u
     if eval_result.escalation_level == 1:
         status = "approved"
         msg = "Transfer submitted successfully."
+        
+        # Determine beneficiary name
+        b_name = "Unknown Transfer"
+        if beneficiary_id is not None:
+            found = next((b for b in _get_beneficiaries(uid) if str(b["id"]) == str(beneficiary_id)), None)
+            if found:
+                b_name = found.get("name", "Unknown Transfer")
+                
         # Update checking balance
-        MOCK_ACCOUNTS["checking"]["balance"] -= amount
+        user_accounts = _get_accounts(uid)
+        user_accounts["checking"]["balance"] -= amount
+        
+        # Append transaction to ledger
+        user_tx = _get_transactions(uid)
+        new_tx = {
+            "id": len(user_tx) + 1,
+            "date": datetime.utcnow().isoformat(),
+            "description": f"Transfer to {b_name}",
+            "amount": -amount,
+            "type": "debit"
+        }
+        user_tx.insert(0, new_tx) # Add to the top of the ledger
     elif eval_result.escalation_level == 2:
         status = "challenged"
         msg = "We need to verify this transfer. A Step-up Verification (OTP) code has been sent to your registered phone."
