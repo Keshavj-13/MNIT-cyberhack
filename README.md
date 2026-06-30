@@ -15,9 +15,9 @@ The project was built for an MNIT cyberhack context, but the repository is organ
 |:---:|:---:|:---:|
 | ![Transfer Funds](./screenshots/customer_transfer.png) | ![Beneficiary Management](./screenshots/customer_beneficiaries.png) | ![Statements](./screenshots/customer_statements.png) |
 
-| Security Card (Escalation & Keys) | Session Contained Lockout |
-|:---:|:---:|
-| ![Security Card](./screenshots/customer_security_card.png) | ![Contained Lockout](./screenshots/customer_contained_lockout.png) |
+| Security Card (Escalation & Keys) |
+|:---:|
+| ![Security Card](./screenshots/customer_security_card.png) |
 
 ### 🛡️ Admin Security Operations Dashboard
 | Admin Incident Console | Admin ARIA Investigations |
