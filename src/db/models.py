@@ -2,6 +2,25 @@ from sqlalchemy import Column, Integer, Float, String, JSON, DateTime, Boolean, 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import datetime
+from sqlalchemy.types import TypeDecorator
+import json
+
+class SafeJSON(TypeDecorator):
+    impl = JSON
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None and not isinstance(value, str):
+            return json.dumps(value)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None and isinstance(value, str):
+            try:
+                return json.loads(value)
+            except Exception:
+                return value
+        return value
 
 Base = declarative_base()
 
@@ -13,12 +32,12 @@ class SecurityEvent(Base):
     session_id = Column(String, index=True)
     event_category = Column(String, default="NEUTRAL") # LURE, HOOK, EXPLOIT, MONETIZE
     timestamp = Column(DateTime, default=datetime.datetime.utcnow, index=True)
-    input_payload = Column(JSON)
+    input_payload = Column(SafeJSON)
     overall_risk = Column(Float)
     decision = Column(String)
     escalation_level = Column(Integer)
     confidence = Column(Float)
-    breakdown = Column(JSON)
+    breakdown = Column(SafeJSON)
     recommendation = Column(String)
     why_decision = Column(String)
 
@@ -37,7 +56,7 @@ class TelemetryData(Base):
     session_id = Column(String, index=True)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
     type = Column(String) # keystroke, mouse, session
-    data = Column(JSON)
+    data = Column(SafeJSON)
 
 class CustomerSession(Base):
     __tablename__ = "customer_sessions"
@@ -63,7 +82,7 @@ class User(Base):
     phone_verified = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     is_ghost = Column(Boolean, default=False)           # non-loginable recipient account
-    recovery_card_data = Column(JSON, nullable=True)    # {A1:7, B3:2, ...} for Tier 4
+    recovery_card_data = Column(SafeJSON, nullable=True)    # {A1:7, B3:2, ...} for Tier 4
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class OTPVerification(Base):
@@ -84,7 +103,7 @@ class AriaInvestigation(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
     cluster_key = Column(String, index=True)          # user_id being investigated
-    cluster_event_ids = Column(JSON)                  # [int, ...]
+    cluster_event_ids = Column(SafeJSON)                  # [int, ...]
     cycle = Column(Integer, default=1)                # how many ARIA passes touched this
     hypothesis = Column(String)
     classification = Column(String)                   # social_eng_chain, ato_fraud, coordinated, unknown
