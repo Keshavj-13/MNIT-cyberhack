@@ -2,7 +2,7 @@
 
 AURA is a banking security demo platform for detecting account takeover, payment fraud, phishing, smishing, device-risk, and network-risk signals. It combines FastAPI services, React/Vite surfaces, provider-based ML scoring, and a risk escalation engine into a four-surface security simulation.
 
-The project was built for an MNIT cyberhack context, but the repository is organized like a production prototype: isolated APIs, isolated user interfaces, model/report artifacts, dataset manifests, screenshots, and verification tests.
+The project was built for an MNNIT cyberhack context, but the repository is organized like a production prototype: isolated APIs, isolated user interfaces, model/report artifacts, dataset manifests, screenshots, and verification tests.
 
 ## Platform Preview
 
