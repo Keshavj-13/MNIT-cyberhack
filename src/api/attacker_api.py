@@ -281,19 +281,11 @@ def run_live_scenario(name: str, target_user: str = "keshav", db: Session = Depe
     ).order_by(CustomerSession.updated_at.desc()).first()
 
     if not cust_session:
-        import secrets
-        # Auto-create a session if not logged in
-        session_id = f"cust_sess_{secrets.token_hex(8)}"
-        cust_session = CustomerSession(
-            session_id=session_id,
-            user_id=LIVE_USER,
-            aes_key=secrets.token_hex(16),
-            is_active=True
+        raise HTTPException(
+            status_code=400,
+            detail=f"No active session for '{LIVE_USER}'. Log in to the Customer Portal first, then run the live attack."
         )
-        db.add(cust_session)
-        db.commit()
-    else:
-        session_id = cust_session.session_id
+    session_id = cust_session.session_id
 
     steps = []
     for step_idx, step in enumerate(DEMO_SCENARIOS[name]):
