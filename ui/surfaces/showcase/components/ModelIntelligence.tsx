@@ -256,7 +256,7 @@ export default function ModelIntelligence() {
                       onClick={() => setMainTab(tab.key as MainTab)}
                       className={`flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
                         mainTab === tab.key
-                          ? 'bg-neutral-800 text-teal-400 shadow-lg border border-slate-200'
+                          ? 'bg-slate-900 text-teal-300 shadow-lg border border-slate-900'
                           : 'text-slate-500 hover:text-slate-700'
                       }`}
                     >
@@ -294,7 +294,7 @@ export default function ModelIntelligence() {
                               ].filter((m) => m.value !== undefined && m.value !== null).map((m) => (
                                 <div
                                   key={m.label}
-                                  className={`text-center p-4 rounded-xl bg-black/30 border ${m.highlight ? 'border-teal-500/30 ring-1 ring-teal-500/20' : 'border-slate-200'}`}
+                                  className={`text-center p-4 rounded-xl bg-slate-50 border ${m.highlight ? 'border-teal-400 ring-1 ring-teal-400/30' : 'border-slate-200'}`}
                                 >
                                   <div className={`text-2xl font-extrabold font-mono ${m.highlight ? 'text-teal-700' : 'text-teal-400'}`}>
                                     {m.value!.toFixed(3)}
