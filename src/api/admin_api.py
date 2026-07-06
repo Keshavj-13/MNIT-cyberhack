@@ -109,19 +109,28 @@ def list_events(limit: int = 50, user_id: Optional[str] = None, db: Session = De
 def list_sessions(db: Session = Depends(get_db), admin = Depends(get_current_admin)):
     """List all active customer sessions with their key rotation states and escalation risk levels."""
     sessions = db.query(CustomerSession).order_by(CustomerSession.is_active.desc(), CustomerSession.updated_at.desc()).all()
-    return [
-        {
+    from src.api.customer_api import _KEY_ROTATION_LOG
+    result = []
+    for s in sessions:
+        rot_log = _KEY_ROTATION_LOG.get(s.session_id, [])
+        last_rot = rot_log[-1] if rot_log else None
+        # Show first 8 + last 4 hex chars of the actual key so analysts can confirm rotation
+        key_display = (s.aes_key[:8] + "·····" + s.aes_key[-4:]) if s.aes_key and len(s.aes_key) >= 12 else (s.aes_key or "")
+        result.append({
             "session_id": s.session_id,
             "user_id": s.user_id,
             "risk_level": s.risk_level,
             "key_version": s.key_version,
-            "aes_key": s.aes_key[:12] + "..." if s.aes_key else None, # masked for safety
+            "aes_key": key_display,
             "created_at": s.created_at.isoformat(),
             "updated_at": s.updated_at.isoformat(),
-            "is_active": s.is_active
-        }
-        for s in sessions
-    ]
+            "is_active": s.is_active,
+            "rotation_count": len(rot_log),
+            "last_rotation_reason": last_rot["reason"] if last_rot else None,
+            "last_rotation_at": last_rot["timestamp"] if last_rot else None,
+            "rotation_log": rot_log,
+        })
+    return result
 
 def _ensure_latest_event(sess, db: Session):
     latest = db.query(SecurityEvent).filter(
@@ -192,14 +201,24 @@ def get_session_live(session_id: str, db: Session = Depends(get_db), admin = Dep
         events_list.append({"type": t.type, "data": t_data, "timestamp": ts_val})
     features = FeatureExtractor().extract_features(events_list)
 
+    from src.api.customer_api import _KEY_ROTATION_LOG
+    rot_log = _KEY_ROTATION_LOG.get(sess.session_id, [])
+    last_rot = rot_log[-1] if rot_log else None
+    key_display = (sess.aes_key[:8] + "·····" + sess.aes_key[-4:]) if sess.aes_key and len(sess.aes_key) >= 12 else (sess.aes_key or "")
+
     return {
         "session": {
             "session_id": sess.session_id,
             "user_id": sess.user_id,
             "risk_level": sess.risk_level,
             "key_version": sess.key_version,
+            "aes_key": key_display,
             "is_active": sess.is_active,
             "updated_at": sess.updated_at.isoformat() if sess.updated_at else None,
+            "rotation_count": len(rot_log),
+            "last_rotation_reason": last_rot["reason"] if last_rot else None,
+            "last_rotation_at": last_rot["timestamp"] if last_rot else None,
+            "rotation_log": rot_log,
         },
         "telemetry": telemetry,
         "telemetry_count": len(telemetry),
