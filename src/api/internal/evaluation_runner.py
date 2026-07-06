@@ -101,9 +101,9 @@ def run_evaluation(payload: Dict[str, Any], db: Session) -> EngineResult:
     
     why_desc = result.why_decision
     if result.escalation_level > prev_level:
-        why_desc = f"[CRYPTO ALERT] Session keys rotated (v{prev_version} -> v{prev_version + 1}), Cryptographic Tier escalated to Level {result.escalation_level} due to: {why_desc}"
+        why_desc = f"Risk elevated due to sequence context. {why_desc} Session key rotated (v{prev_version}→v{prev_version + 1})."
     elif result.escalation_level < prev_level:
-        why_desc = f"[CRYPTO INFO] Cryptographic Tier reduced to Level {result.escalation_level} (Authority restored) due to: {why_desc}"
+        why_desc = f"Risk reduced. {why_desc}"
 
     db_event = SecurityEvent(
         user_id=user_id,

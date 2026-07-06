@@ -164,7 +164,7 @@ class RiskEngine:
 
         if has_recent_lure and ("HOOK" in current_cats or "EXPLOIT" in current_cats):
             score = min(1.0, score * 1.3)
-            narrative.append("Risk elevated due to sequence: Previous SMISHING LURE followed by interaction.")
+            narrative.append("Risk elevated due to sequence: Previous phishing/social-engineering LURE followed by credential interaction.")
 
         if (has_recent_lure or has_recent_hook) and "MONETIZE" in current_cats:
             score = min(1.0, score * 1.5)
