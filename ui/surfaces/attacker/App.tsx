@@ -327,6 +327,15 @@ export default function App() {
                         <div key={i} className="flex-1 text-center text-sm text-slate-600 font-mono">S{i+1}</div>
                       ))}
                     </div>
+                    {/* Risk acceleration explanation */}
+                    <div className="pt-2 border-t border-slate-100 text-xs text-slate-500 leading-relaxed">
+                      <span className="font-semibold text-slate-600">Why risk accelerates: </span>
+                      AURA uses cumulative session priors — each evaluation blends the current
+                      risk score with the session's prior risk level
+                      (L2&nbsp;+0.25, L3&nbsp;+0.50), so confirmed signals compound rather than reset.
+                      Attack-chain correlations (LURE→MONETIZE, EXPLOIT→MONETIZE) apply a ×1.5
+                      multiplier when a transaction follows a social-engineering or device-exploit event.
+                    </div>
                   </div>
 
                   {/* Step-by-step kill chain */}

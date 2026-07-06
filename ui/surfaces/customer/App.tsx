@@ -1929,6 +1929,51 @@ export default function App() {
                   </table>
                 </div>
               </div>
+
+              {/* Session Security History — only shown once escalation events have occurred */}
+              {escalationNotifications.length > 0 && (
+                <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+                  <h3 className="text-base font-semibold tracking-wide text-slate-900">Session Security History</h3>
+                  <div className="relative">
+                    {/* Static L1 start node */}
+                    <div className="flex gap-3 mb-4">
+                      <div className="flex flex-col items-center shrink-0">
+                        <span className="w-3 h-3 rounded-full bg-emerald-500 mt-0.5"/>
+                        {escalationNotifications.length > 0 && <div className="w-0.5 flex-1 bg-slate-200 mt-1 min-h-[20px]"/>}
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold text-slate-800">L1 — Session established</div>
+                        <div className="text-xs text-slate-400 font-mono mt-0.5">AES-256 session key v1 issued</div>
+                      </div>
+                    </div>
+
+                    {/* Escalation events */}
+                    {escalationNotifications.map((n, i) => {
+                      const up = n.toLevel > n.fromLevel;
+                      const dot = n.toLevel >= 4 ? 'bg-red-500' : n.toLevel >= 3 ? 'bg-orange-500' : n.toLevel >= 2 ? 'bg-amber-500' : 'bg-emerald-500';
+                      const label = n.toLevel >= 4 ? 'L4 — Cryptographic lockout · PQC Recovery' :
+                                    n.toLevel === 3 ? 'L3 — OTP + key rotation + password reset required' :
+                                    n.toLevel === 2 ? 'L2 — OTP step-up challenge' :
+                                    'L1 — Session restored';
+                      const sub = up ? `AES-256 key rotated · ${n.reason || 'Security escalation'}` : 'Risk cleared · key stable';
+                      const isLast = i === escalationNotifications.length - 1;
+                      return (
+                        <div key={n.id} className="flex gap-3 mb-4">
+                          <div className="flex flex-col items-center shrink-0">
+                            <span className={`w-3 h-3 rounded-full mt-0.5 ${dot}`}/>
+                            {!isLast && <div className="w-0.5 flex-1 bg-slate-200 mt-1 min-h-[20px]"/>}
+                          </div>
+                          <div>
+                            <div className={`text-sm font-semibold ${n.toLevel >= 4 ? 'text-red-700' : n.toLevel >= 3 ? 'text-orange-700' : n.toLevel >= 2 ? 'text-amber-700' : 'text-emerald-700'}`}>{label}</div>
+                            <div className="text-xs text-slate-400 font-mono mt-0.5">{sub}</div>
+                            <div className="text-xs text-slate-400 mt-0.5">{n.timestamp}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
