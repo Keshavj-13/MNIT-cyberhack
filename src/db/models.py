@@ -159,6 +159,10 @@ def _migrate_schema():
             "is_ghost": "ALTER TABLE users ADD COLUMN is_ghost BOOLEAN DEFAULT 0",
             "recovery_card_data": "ALTER TABLE users ADD COLUMN recovery_card_data JSON",
         },
+        "otp_verifications": {
+            # Older DBs created before purpose was added get "registration" as default
+            "purpose": "ALTER TABLE otp_verifications ADD COLUMN purpose VARCHAR DEFAULT 'registration'",
+        },
     }
     with engine.connect() as conn:
         for table, cols in migrations.items():
