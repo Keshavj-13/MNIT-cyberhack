@@ -1071,9 +1071,14 @@ export default function App() {
                         return <span className={`px-3 py-1 rounded text-sm font-bold uppercase text-white shrink-0 ${bg[rl]||bg[1]}`}>L{rl} {riskLabels[rl]}</span>;
                       })()}
                       {liveData?.session && (
-                        <span className="text-xs text-slate-400 font-mono shrink-0">
-                          AES v{liveData.session.key_version}{liveData.session.is_active===false?' · REVOKED':''}
-                        </span>
+                        <div className="flex flex-col items-end">
+                          <span className="text-xs font-mono text-slate-300">
+                            AES-256 kv{liveData.session.key_version}{liveData.session.is_active===false?' · REVOKED':''}
+                          </span>
+                          {liveData.session.aes_key && (
+                            <span className="text-xs font-mono text-slate-500">{liveData.session.aes_key}</span>
+                          )}
+                        </div>
                       )}
                       <button onClick={() => { setLiveSessionId(null); setLiveData(null); }}
                         className="text-slate-400 hover:text-white text-xl font-bold ml-2 shrink-0 leading-none">✕</button>
@@ -1087,10 +1092,15 @@ export default function App() {
                       /* 3-column investigation body */
                       <div className="flex-1 grid grid-cols-3 divide-x divide-slate-200 overflow-hidden">
 
-                        {/* Col 1: Security event timeline */}
+                        {/* Col 1: Security event timeline + key rotation history */}
                         <div className="flex flex-col overflow-hidden">
-                          <div className="px-5 py-3 border-b border-slate-100 shrink-0">
+                          <div className="px-5 py-3 border-b border-slate-100 shrink-0 flex items-center justify-between">
                             <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">Security Timeline</p>
+                            {liveData.session?.rotation_count > 0 && (
+                              <span className="text-xs bg-amber-50 border border-amber-200 text-amber-700 font-semibold px-2 py-0.5 rounded">
+                                {liveData.session.rotation_count} key rotation{liveData.session.rotation_count > 1 ? 's' : ''}
+                              </span>
+                            )}
                           </div>
                           <div className="flex-1 overflow-y-auto p-5">
                             {sessionTimeline.length === 0
@@ -1116,6 +1126,29 @@ export default function App() {
                                   );
                                 })
                             }
+
+                            {/* Key rotation history */}
+                            {liveData.session?.rotation_log?.length > 0 && (
+                              <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Key Rotation Log</p>
+                                {[...liveData.session.rotation_log].reverse().map((r: any, i: number) => (
+                                  <div key={i} className="flex gap-3">
+                                    <div className="flex flex-col items-center shrink-0">
+                                      <span className="w-2.5 h-2.5 rounded-full bg-blue-400 mt-1 shrink-0"/>
+                                      {i < liveData.session.rotation_log.length - 1 && <div className="w-0.5 flex-1 bg-slate-200 mt-1 min-h-[12px]"/>}
+                                    </div>
+                                    <div className="pb-1 min-w-0">
+                                      <div className="text-xs font-mono text-slate-400">{new Date(r.timestamp).toLocaleTimeString()}</div>
+                                      <div className="text-sm font-bold text-blue-700">v{r.from_version} → v{r.to_version}</div>
+                                      <div className="text-xs font-mono text-slate-500 mt-0.5">
+                                        {r.old_key_prefix}···  →  {r.new_key_prefix}···
+                                      </div>
+                                      <div className="text-xs text-slate-500 mt-0.5">{r.reason}</div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -1163,6 +1196,43 @@ export default function App() {
                               );
                             })() : (
                               <p className="text-base text-slate-400 italic mt-4">No model evaluation yet for this session.</p>
+                            )}
+
+                            {/* Cryptographic session details */}
+                            {liveData.session && (
+                              <div className="border-t border-slate-100 pt-4 space-y-2">
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cryptographic State</p>
+                                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1.5">
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-slate-500">Session key</span>
+                                    <span className={`font-mono font-bold text-xs ${liveData.session.is_active===false ? 'text-red-600 line-through' : 'text-slate-800'}`}>
+                                      {liveData.session.aes_key || '—'}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-slate-500">Key version</span>
+                                    <span className="font-mono font-bold text-slate-800">v{liveData.session.key_version}</span>
+                                  </div>
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-slate-500">Rotations</span>
+                                    <span className="font-mono text-slate-800">{liveData.session.rotation_count || 0}</span>
+                                  </div>
+                                  {liveData.session.last_rotation_reason && (
+                                    <div className="flex justify-between text-sm">
+                                      <span className="text-slate-500">Last reason</span>
+                                      <span className="text-amber-700 text-xs font-semibold text-right max-w-[55%]">{liveData.session.last_rotation_reason}</span>
+                                    </div>
+                                  )}
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-slate-500">Cipher</span>
+                                    <span className="text-slate-700 font-semibold text-xs">
+                                      {(liveData.session.risk_level || 1) >= 4 ? 'PQC Recovery' :
+                                       (liveData.session.risk_level || 1) >= 3 ? 'AES-256 + Key Rotation' :
+                                       (liveData.session.risk_level || 1) >= 2 ? 'AES-256 + OTP' : 'AES-256'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
                             )}
 
                             {/* Provider bars */}
