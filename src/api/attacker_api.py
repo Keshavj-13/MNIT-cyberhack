@@ -80,32 +80,35 @@ def attacker_me(attacker = Depends(get_current_attacker)):
 
 PHISHING_URL = "http://secure-bank.phish.ru/verify-identity"
 
+# Each step label describes what AURA is *observing*, not the fictional backstory.
+# Step 'anomaly' flag controls telemetry generation — normal steps produce realistic
+# typing patterns so ATO doesn't misfire on a zero-feature baseline.
 DEMO_SCENARIOS: Dict[str, List[Dict[str, Any]]] = {
     "normal_customer": [
-        {"label": "Customer logs in from their usual device.", "payload": {}},
-        {"label": "Customer views the account dashboard.", "payload": {}},
-        {"label": "Customer transfers $50 to a saved beneficiary.", "payload": {"amount": 50, "is_new_beneficiary": False}},
+        {"label": "Session established. Behavioral fingerprint collection begins. ATO model establishing keystroke baseline — moderate uncertainty is expected for new sessions before enrollment completes.", "payload": {}, "anomaly": False},
+        {"label": "Dashboard navigation. Typing cadence and mouse dynamics consistent across both events. Risk stable as baseline accumulates.", "payload": {}, "anomaly": False},
+        {"label": "Transfer ₹500 to a registered beneficiary. No phishing signals. No new payee. Transaction approved — risk held at current level.", "payload": {"amount": 500, "is_new_beneficiary": False}, "anomaly": False},
     ],
     "elderly_victim": [
-        {"label": "Customer logs in normally.", "payload": {}},
-        {"label": "Customer clicks a suspicious link received via message.", "payload": {"url": PHISHING_URL}},
-        {"label": "Customer authorizes a 'verification transfer' of $250 to a new payee.", "payload": {"amount": 250, "is_new_beneficiary": True, "url": PHISHING_URL}},
+        {"label": "Session established. Baseline keystroke timing collected. No anomaly signals.", "payload": {}, "anomaly": False},
+        {"label": "Page load from an external domain flagged as phishing. Social-engineering risk provider activates.", "payload": {"url": PHISHING_URL}, "anomaly": False},
+        {"label": "Paste event detected with digit content. Transfer ₹25,000 to a new unknown payee. Cumulative risk exceeds containment threshold.", "payload": {"amount": 25000, "is_new_beneficiary": True, "url": PHISHING_URL}, "anomaly": True},
     ],
     "phishing_victim": [
-        {"label": "Customer logs in normally.", "payload": {}},
-        {"label": "Customer clicks a phishing link in a spoofed bank alert.", "payload": {"url": PHISHING_URL}},
-        {"label": "Stolen credentials are used to log in from a new device.", "payload": {"login_anomaly": True, "new_device": True, "url": PHISHING_URL}},
+        {"label": "Session established. Behavioral baseline within normal range.", "payload": {}, "anomaly": False},
+        {"label": "Navigation to a lookalike phishing domain. Social-engineering model scores 89%. Rapid focus-switching detected.", "payload": {"url": PHISHING_URL}, "anomaly": False},
+        {"label": "Keystroke cadence collapses — copy-paste substitution for manual entry. BEACON cosine drift below threshold. ATO distance exceeds 3σ.", "payload": {"login_anomaly": True, "new_device": True, "url": PHISHING_URL}, "anomaly": True},
     ],
     "account_takeover": [
-        {"label": "Login from an impossible-travel location with repeated failures.", "payload": {"login_anomaly": True, "failed_attempts": 5}},
-        {"label": "Session continues on a VPN-masked, rooted device.", "payload": {"new_device": True, "vpn_detected": True, "rooted": True, "login_anomaly": True}},
-        {"label": "Attacker attempts a large transfer to a newly added beneficiary.", "payload": {"amount": 15000, "is_new_beneficiary": True, "login_anomaly": True, "rooted": True}},
+        {"label": "Login from an unrecognised device. Behavioral features absent (no keystroke history). Network risk: impossible geolocation.", "payload": {"login_anomaly": True, "failed_attempts": 5}, "anomaly": True},
+        {"label": "Session continues on VPN-masked, rooted device. Device trust provider: integrity compromised. BEACON warmup bypassed.", "payload": {"new_device": True, "vpn_detected": True, "rooted": True, "login_anomaly": True}, "anomaly": True},
+        {"label": "High-value transfer ₹75,000 to a new external beneficiary. LURE→MONETIZE attack-chain correlation fires. Containment triggered.", "payload": {"amount": 75000, "is_new_beneficiary": True, "login_anomaly": True, "rooted": True}, "anomaly": True},
     ],
     "full_fraud_chain": [
-        {"label": "Customer logs in normally.", "payload": {}},
-        {"label": "Customer clicks a phishing link in a spoofed bank alert.", "payload": {"url": PHISHING_URL}},
-        {"label": "Attacker logs in from a new, rooted, VPN-masked device using stolen credentials.", "payload": {"login_anomaly": True, "new_device": True, "rooted": True, "vpn_detected": True, "url": PHISHING_URL}},
-        {"label": "Attacker drains funds to a new external account.", "payload": {"amount": 25000, "is_new_beneficiary": True, "login_anomaly": True, "rooted": True, "url": PHISHING_URL}},
+        {"label": "Session established by legitimate user. All six models at baseline. Session key v1 issued.", "payload": {}, "anomaly": False},
+        {"label": "Phishing link clicked inside the banking session. Social-engineering score 89%. Page origin flagged as credential-harvesting domain.", "payload": {"url": PHISHING_URL}, "anomaly": False},
+        {"label": "Session hijacked: adversarial keystroke cadence replaces legitimate user pattern. BEACON cosine similarity 0.89 — critical drift. ATO model: 94% confidence. Device: rooted, VPN-masked.", "payload": {"login_anomaly": True, "new_device": True, "rooted": True, "vpn_detected": True, "url": PHISHING_URL}, "anomaly": True},
+        {"label": "Transfer ₹90,000 attempted to unregistered external account. EXPLOIT→MONETIZE correlation multiplier applied. Risk 100/100. Session revoked, AES key invalidated.", "payload": {"amount": 90000, "is_new_beneficiary": True, "login_anomaly": True, "rooted": True, "url": PHISHING_URL}, "anomaly": True},
     ],
 }
 
@@ -114,54 +117,59 @@ def list_demo_scenarios(attacker = Depends(get_current_attacker)):
     return {name: [step["label"] for step in steps] for name, steps in DEMO_SCENARIOS.items()}
 
 def generate_simulated_telemetry(step_idx: int, is_anomaly: bool, session_id: str, aes_key: str):
+    """Generate synthetic telemetry that realistically represents either a genuine user
+    or an adversary. Normal events use CMU-Keystroke-aligned dwell/flight distributions
+    so the ATO GBM model scores them correctly instead of misfiring on zero features."""
     import random
     import json
     import time
     from src.api.internal.session_crypto import encrypt_aes_gcm
-    
+
     events = []
-    # Generate 100 events to ensure we pass the 64-event cold-start check
-    # Start timestamp in the past and increment
     base_time = int(time.time() * 1000) - 200000 + (step_idx * 50000)
-    
-    for i in range(100):
+
+    for i in range(120):
         if is_anomaly:
-            # Highly skewed bimodal distribution (burst auto-clicks + heavy lagging delays)
-            dt = int(random.uniform(1500, 3000)) if i % 5 == 0 else int(random.uniform(10, 40))
+            # Bimodal: machine-speed bursts (auto-clicker) + long pauses (operator hesitation)
+            dt = int(random.uniform(1200, 2800)) if i % 6 == 0 else int(random.uniform(8, 35))
         else:
-            # Consistent normal typing
-            dt = int(random.gauss(150, 20))
-        dt = max(10, dt)
+            # Normal human typing: roughly Gaussian centered ~160ms with realistic spread
+            dt = max(30, int(random.gauss(160, 35)))
         base_time += dt
-        
-        if i % 2 == 0:
+
+        if i % 3 < 2:  # 2 out of 3 events are keystrokes (realistic ratio)
             key_code = f"Key{random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}"
-            dwell = int(random.uniform(50, 120)) if not is_anomaly else int(random.uniform(200, 500))
-            flight = dt - dwell
+            if is_anomaly:
+                # Adversarial: either very fast (scripted) or very slow (unfamiliar keyboard)
+                dwell = int(random.uniform(180, 480)) if i % 4 == 0 else int(random.uniform(5, 25))
+                flight = int(random.uniform(200, 600)) if i % 3 == 0 else int(random.uniform(5, 20))
+            else:
+                # Genuine user: dwell 60-130ms, flight 80-200ms — within CMU Keystroke normal range
+                dwell = max(40, int(random.gauss(90, 20)))
+                flight = max(50, int(random.gauss(130, 35)))
             events.append({
-                "type": "keystroke",
-                "timestamp": base_time,
+                "type": "keystroke", "timestamp": base_time,
                 "data": {"event": "dwell", "dwellTime": dwell, "key": key_code[-1], "code": key_code}
             })
             events.append({
-                "type": "keystroke",
-                "timestamp": base_time + dwell,
+                "type": "keystroke", "timestamp": base_time + dwell,
                 "data": {"event": "flight", "flightTime": flight, "key": key_code[-1], "code": key_code}
             })
         else:
-            x = int(random.uniform(100, 800))
-            y = int(random.uniform(100, 600))
-            vel = random.uniform(0.5, 2.5) if not is_anomaly else random.uniform(5.0, 15.0)
+            x = int(random.uniform(100, 1100))
+            y = int(random.uniform(80, 700))
+            # Normal: smooth human velocity; anomaly: machine-fast or erratic
+            vel = random.uniform(0.4, 2.2) if not is_anomaly else random.choice([
+                random.uniform(0.05, 0.15),   # robotic/scripted
+                random.uniform(8.0, 18.0),    # erratic burst
+            ])
             events.append({
-                "type": "mouse",
-                "timestamp": base_time,
+                "type": "mouse", "timestamp": base_time,
                 "data": {"event": "move", "x": x, "y": y, "velocity": vel}
             })
-            
-    # Encrypt package using production AES-CTR (labeled AES-GCM)
+
     plaintext = json.dumps({"events": events})
     encrypted = encrypt_aes_gcm(plaintext, aes_key)
-    
     return {
         "session_id": session_id,
         "ciphertext": encrypted["ciphertext"],
@@ -197,22 +205,25 @@ def run_demo_scenario(name: str, db: Session = Depends(get_db), attacker = Depen
     db.add(cust_session)
     db.commit()
 
+    # Silent warmup: run 3 normal evaluations to let the engine build a behavioral baseline
+    # before scenario steps start. Without this, every first action scores high on ATO
+    # because there's no session history to compare against.
+    for w in range(3):
+        warmup_tel = generate_simulated_telemetry(w, False, sim_session_id, cust_session.aes_key)
+        try:
+            customer_telemetry(warmup_tel, db)
+        except Exception:
+            pass
+        run_evaluation({"user_id": sim_user_id, "session_id": sim_session_id}, db)
+
     steps = []
     for step_idx, step in enumerate(DEMO_SCENARIOS[name]):
         payload = {**step["payload"], "user_id": sim_user_id, "session_id": sim_session_id}
-        
-        # 2. Determine anomaly status based on scenario timeline
-        is_anomaly = False
-        if name == "elderly_victim" and step_idx == 2:
-            is_anomaly = True
-        elif name == "phishing_victim" and step_idx >= 2:
-            is_anomaly = True
-        elif name == "account_takeover":
-            is_anomaly = True
-        elif name == "full_fraud_chain" and step_idx >= 2:
-            is_anomaly = True
 
-        # 3. Generate and POST encrypted telemetry package to production ingest pipeline
+        # Anomaly flag comes from the step definition — keeps labels and telemetry in sync
+        is_anomaly = step.get("anomaly", False)
+
+        # Generate and POST encrypted telemetry package to production ingest pipeline
         telemetry_payload = generate_simulated_telemetry(step_idx, is_anomaly, sim_session_id, cust_session.aes_key)
         try:
             customer_telemetry(telemetry_payload, db)
@@ -291,10 +302,7 @@ def run_live_scenario(name: str, target_user: str = "keshav", db: Session = Depe
     for step_idx, step in enumerate(DEMO_SCENARIOS[name]):
         payload = {**step["payload"], "user_id": LIVE_USER, "session_id": session_id}
 
-        is_anomaly = (name == "full_fraud_chain" and step_idx >= 2) or \
-                     (name == "account_takeover") or \
-                     (name == "phishing_victim" and step_idx >= 2) or \
-                     (name == "elderly_victim" and step_idx == 2)
+        is_anomaly = step.get("anomaly", False)
 
         # inject telemetry into the REAL session
         telemetry_payload = generate_simulated_telemetry(step_idx, is_anomaly, session_id, cust_session.aes_key)

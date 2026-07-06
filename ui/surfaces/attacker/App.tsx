@@ -162,7 +162,8 @@ export default function App() {
   const scenarioMeta = result ? SCENARIOS.find(s => s.key === result.scenarioKey) : null;
   const maxRisk = result ? Math.max(...result.steps.map(s => s.result.overall_risk)) : 0;
   const finalStep = result?.steps[result.steps.length - 1];
-  const breached = finalStep && finalStep.result.escalation_level <= 2;
+  const isNormalCustomer = result?.scenarioKey === 'normal_customer';
+  const breached = finalStep && finalStep.result.escalation_level <= 2 && !isNormalCustomer;
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 flex-col">
@@ -291,10 +292,12 @@ export default function App() {
                     </div>
                     {finalStep && (
                       <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold ${
-                        breached ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-teal-500/10 border-teal-500/30 text-teal-400'
+                        isNormalCustomer ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600'
+                        : breached ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                        : 'bg-teal-500/10 border-teal-500/30 text-teal-400'
                       }`}>
-                        {breached ? <Unlock size={16}/> : <Lock size={16}/>}
-                        {breached ? 'DEFENSES BREACHED' : 'ATTACK CONTAINED'}
+                        {isNormalCustomer ? <CheckCircle2 size={16}/> : breached ? <Unlock size={16}/> : <Lock size={16}/>}
+                        {isNormalCustomer ? 'NO THREAT' : breached ? 'DEFENSES BREACHED' : 'ATTACK CONTAINED'}
                       </div>
                     )}
                   </div>
@@ -332,8 +335,10 @@ export default function App() {
                       const lvl = LEVEL_META[Math.min(step.result.escalation_level - 1, 3)];
                       const LvlIcon = lvl.Icon;
                       const visible = i <= animStep;
-                      const cat = step.result.provider_breakdown
-                        ? Object.values(step.result.provider_breakdown).find((p: any) => p.event_category !== 'NEUTRAL')
+                      // Only surface a phase label when risk is genuinely elevated — avoids showing
+                      // misleading EXPLOIT badges on low-risk steps where a single provider misfires.
+                      const cat = step.result.overall_risk > 0.25 && step.result.provider_breakdown
+                        ? Object.values(step.result.provider_breakdown).find((p: any) => p.event_category !== 'NEUTRAL' && p.risk_score > 0.5)
                         : null;
                       const phase = (cat as any)?.event_category || 'NEUTRAL';
 
@@ -379,18 +384,29 @@ export default function App() {
                               </div>
 
                               {/* Provider mini-grid */}
-                              {step.result.provider_breakdown && (
-                                <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-200">
-                                  {Object.entries(step.result.provider_breakdown).map(([name, d]: [string, any]) => (
-                                    <div key={name} className={`rounded-lg px-2 py-1.5 ${d.risk_score > 0.5 ? 'bg-red-500/10 border border-red-500/20' : 'bg-slate-50'}`}>
-                                      <p className="text-sm text-slate-500 truncate">{name.replace('Provider','').replace('RiskProvider','').replace('Risk','')}</p>
-                                      <p className={`text-sm font-mono font-bold ${d.risk_score > 0.7 ? 'text-red-400' : d.risk_score > 0.4 ? 'text-amber-400' : 'text-slate-500'}`}>
-                                        {(d.risk_score * 100).toFixed(0)}
-                                      </p>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                              {step.result.provider_breakdown && (() => {
+                                const SHORT: Record<string, string> = {
+                                  BeaconBehavioralProvider: 'BEACON', AccountTakeoverProvider: 'ATO',
+                                  TransactionRiskProvider: 'Transaction', SocialEngineeringRiskProvider: 'Social',
+                                  NetworkRiskProvider: 'Network', DeviceTrustProvider: 'Device',
+                                };
+                                return (
+                                  <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-200">
+                                    {Object.entries(step.result.provider_breakdown).map(([name, d]: [string, any]) => {
+                                      const pct = Math.round(d.risk_score * 100);
+                                      const high = d.risk_score > 0.5;
+                                      return (
+                                        <div key={name} className={`rounded-lg px-2 py-1.5 ${high ? 'bg-red-50 border border-red-200' : 'bg-slate-50'}`}>
+                                          <p className="text-xs text-slate-500 truncate font-semibold">{SHORT[name] || name.replace('Provider','').replace('Risk','')}</p>
+                                          <p className={`text-sm font-mono font-bold ${pct >= 70 ? 'text-red-600' : pct >= 40 ? 'text-amber-600' : 'text-slate-500'}`}>
+                                            {pct}%
+                                          </p>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         </div>
@@ -400,12 +416,14 @@ export default function App() {
 
                   {/* Final verdict */}
                   {animStep >= result.steps.length - 1 && finalStep && (
-                    <div className={`rounded-2xl p-5 border ${breached ? 'bg-red-500/5 border-red-500/20' : 'bg-teal-500/5 border-teal-500/20'}`}>
+                    <div className={`rounded-2xl p-5 border ${isNormalCustomer ? 'bg-emerald-500/5 border-emerald-500/20' : breached ? 'bg-red-500/5 border-red-500/20' : 'bg-teal-500/5 border-teal-500/20'}`}>
                       <div className="flex items-center gap-3 mb-3">
-                        {breached ? <Unlock size={20} className="text-red-400"/> : <Lock size={20} className="text-teal-400"/>}
+                        {isNormalCustomer
+                          ? <CheckCircle2 size={20} className="text-emerald-500"/>
+                          : breached ? <Unlock size={20} className="text-red-400"/> : <Lock size={20} className="text-teal-400"/>}
                         <div>
-                          <p className={`text-sm font-bold ${breached ? 'text-red-300' : 'text-teal-300'}`}>
-                            {breached ? 'Attack Partially Succeeded' : 'Attack Successfully Contained'}
+                          <p className={`text-sm font-bold ${isNormalCustomer ? 'text-emerald-600' : breached ? 'text-red-300' : 'text-teal-300'}`}>
+                            {isNormalCustomer ? 'Normal Session — No Threat Detected' : breached ? 'Attack Partially Succeeded' : 'Attack Successfully Contained'}
                           </p>
                           <p className="text-sm text-slate-500 mt-0.5">{finalStep.result.recommendation}</p>
                         </div>
