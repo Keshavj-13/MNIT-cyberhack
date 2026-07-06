@@ -108,6 +108,7 @@ export default function App() {
   const [showCryptoModal, setShowCryptoModal] = useState(false);
   const [keyRotatedAnim, setKeyRotatedAnim] = useState(false);
   const [keyRotationInfo, setKeyRotationInfo] = useState<any>(null);
+  const [keyRotationReason, setKeyRotationReason] = useState<string>('Behavioral anomaly detected');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -426,11 +427,19 @@ export default function App() {
     setSmsNotification(null);
     setShowCryptoModal(false);
     setShowOtpModal(false);
+    setShowPwResetModal(false);
+    setPwResetOtp(''); setPwResetNew(''); setPwResetError('');
+    setRecoveryPositions(null);
+    setRecoveryOtp(''); setRecoveryAnswers({}); setRecoveryNewPw('');
+    setRecoveryError(''); setRecoveryDevOtp(null); setRecoveryDone(null);
+    setPayeeMode('saved');
+    setTransferName(''); setTransferAccount('');
   };
 
-  // Triggers key shuffle visual indicator
-  const animateKeyRotation = (newKey: string, newVersion: number, newRisk: number) => {
+  // Triggers key shuffle visual indicator — shows actual key transition for ~2.5s
+  const animateKeyRotation = (newKey: string, newVersion: number, newRisk: number, reason?: string) => {
     setKeyRotatedAnim(true);
+    setKeyRotationReason(reason || 'Behavioral anomaly detected');
     setKeyRotationInfo({
       oldKey: cryptoState.aesKey,
       newKey: newKey,
@@ -438,8 +447,6 @@ export default function App() {
       newVersion: newVersion,
       riskLevel: newRisk
     });
-    
-    // Play sound or vibration if needed, then update state after animation delay
     setTimeout(() => {
       setCryptoState(prev => ({
         ...prev,
@@ -449,7 +456,7 @@ export default function App() {
       }));
       setKeyRotatedAnim(false);
       setRefreshTrigger(prev => prev + 1);
-    }, 2500);
+    }, 2800);
   };
 
   // Apply a recovery response: adopt the rotated key, drop back to L1, surface any completed transfer.
@@ -495,7 +502,9 @@ export default function App() {
         : await transferMoney(cryptoState, amountNum, null, true, transferName.trim(), transferAccount.trim());
 
       if (res.key_rotated && res.new_key) {
-        // adopt rotated key immediately so the recovery calls encrypt/authorise correctly
+        // Briefly show the key transition, then adopt the new key
+        animateKeyRotation(res.new_key, res.new_key_version, res.risk_level, res.rotation_reason);
+        // Adopt immediately for subsequent API calls (animation is display-only)
         setCryptoState(prev => ({ ...prev, aesKey: res.new_key, keyVersion: res.new_key_version, riskLevel: res.risk_level }));
       }
 
@@ -761,22 +770,43 @@ export default function App() {
               <Lock size={26} className="text-red-600" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Account Secured</h1>
-              <p className="text-sm text-slate-500 mt-0.5">We paused your session to protect you. Confirm your identity to restore access.</p>
+              <h1 className="text-2xl font-bold text-slate-900">PQC Recovery Protocol</h1>
+              <p className="text-sm text-slate-500 mt-0.5">L4 Containment — AES-256 session revoked. Identity confirmation required to establish a new secure session.</p>
+            </div>
+          </div>
+
+          {/* Cryptographic state panel */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cryptographic State</div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Session key</span>
+              <span className="font-mono text-red-600 font-semibold line-through text-xs">{cryptoState.aesKey ? `${cryptoState.aesKey.slice(0,8)}····` : '—'}  REVOKED</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Key version</span>
+              <span className="font-mono font-bold text-slate-700">v{cryptoState.keyVersion}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Protection tier</span>
+              <span className="font-bold text-red-700">L4 — Contained</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Recovery scheme</span>
+              <span className="font-semibold text-slate-700">Out-of-band · Recovery Card</span>
             </div>
           </div>
 
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-700 flex items-center gap-3">
             <CheckCircle size={18} className="shrink-0 text-emerald-600" />
-            <span>Your money is safe. Any pending transfer will complete only after you verify.</span>
+            <span>Your funds are safe. A new session will be established after identity confirmation.</span>
           </div>
 
           {!recoveryPositions ? (
             <div className="space-y-4">
               <ol className="text-sm text-slate-600 space-y-2 list-decimal pl-5">
                 <li>We'll email you a one-time verification code.</li>
-                <li>You'll read two digits from your printed Recovery Card.</li>
-                <li>You'll set a new password to finish.</li>
+                <li>You'll read two digits from your physical Recovery Card — an out-of-band secret the system never transmits.</li>
+                <li>You'll set a new password, and a fresh AES-256 session will be created.</li>
               </ol>
               {recoveryError && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{recoveryError}</div>}
               <button onClick={startCardChallenge}
@@ -830,18 +860,51 @@ export default function App() {
     );
   }
 
-  // Brief security update (key rotation) — shows for ~2.5s
-  if (keyRotatedAnim) {
+  // Key rotation visualization — shows the actual AES-256 key transition for ~2.8s
+  if (keyRotatedAnim && keyRotationInfo) {
+    const lvlColors: Record<number, string> = { 1: 'emerald', 2: 'amber', 3: 'orange', 4: 'red' };
+    const lvlNames: Record<number, string> = { 1: 'L1 — AES-256', 2: 'L2 — AES-256 + OTP', 3: 'L3 — AES-256 + OTP + Key Rotation', 4: 'L4 — PQC Recovery Protocol' };
+    const c = lvlColors[keyRotationInfo.riskLevel] || 'slate';
+    const lvlLabel = lvlNames[keyRotationInfo.riskLevel] || 'AES-256';
+    const fmtKey = (k: string) => k ? `${k.slice(0,8)} ···· ${k.slice(-8)}` : '—';
     return (
       <div className="flex h-screen bg-white font-sans items-center justify-center p-6" style={{ fontFamily: 'Inter, Arial, sans-serif' }}>
-        <div className="max-w-sm w-full text-center space-y-4">
-          <div className="w-16 h-16 rounded-full bg-blue-50 border-2 border-blue-200 grid place-items-center mx-auto animate-spin">
-            <Shield size={28} className="text-blue-600" />
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl shadow-xl p-8 space-y-5">
+          <div className="flex items-center gap-3">
+            <div className={`w-11 h-11 rounded-full bg-${c}-50 border border-${c}-200 grid place-items-center shrink-0`}>
+              <Key size={20} className={`text-${c}-600`} />
+            </div>
+            <div>
+              <div className="text-base font-bold text-slate-900">AES-256 Session Key Rotating</div>
+              <div className={`text-sm font-semibold text-${c}-700 mt-0.5`}>{lvlLabel}</div>
+            </div>
           </div>
-          <h2 className="text-lg font-bold text-gray-900">Updating Security</h2>
-          <p className="text-sm text-gray-500">Your account protection is being refreshed. This takes just a moment.</p>
-          <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 animate-[pulse_1s_infinite] w-full rounded-full"></div>
+
+          {/* Key transition — old → new */}
+          <div className="space-y-2">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Previous key — v{keyRotationInfo.oldVersion}</div>
+              <div className="font-mono text-sm text-slate-500 line-through">{fmtKey(keyRotationInfo.oldKey)}</div>
+            </div>
+            <div className="flex justify-center">
+              <div className={`text-xs font-bold text-${c}-600 flex items-center gap-1.5 py-1`}>
+                <RefreshCw size={12} className="animate-spin" />
+                {keyRotationReason}
+              </div>
+            </div>
+            <div className={`bg-${c}-50 border border-${c}-200 rounded-xl p-4`}>
+              <div className={`text-xs font-semibold text-${c}-600 uppercase tracking-wider mb-1`}>New key — v{keyRotationInfo.newVersion}</div>
+              <div className={`font-mono text-sm text-${c}-800 font-bold`}>{fmtKey(keyRotationInfo.newKey)}</div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <Info size={12} />
+            <span>Your session is being re-secured. This completes automatically.</span>
+          </div>
+          <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+            <div className={`h-full bg-${c}-500 rounded-full animate-[progress_2.8s_linear_forwards]`}
+              style={{ animation: 'progress 2.8s linear forwards', width: '100%' }} />
           </div>
         </div>
       </div>
@@ -1704,9 +1767,9 @@ export default function App() {
 
   // Security status from backend risk level only
   const secStatus = (() => {
-    if (cryptoState.riskLevel >= 3) return { dot: 'bg-orange-500', text: 'text-orange-700', border: 'border-orange-200', bg: 'bg-orange-50', label: 'Verification Required', pulse: true };
-    if (cryptoState.riskLevel === 2) return { dot: 'bg-amber-500',  text: 'text-amber-700',  border: 'border-amber-200',  bg: 'bg-amber-50',  label: 'Monitoring',             pulse: true };
-    return { dot: 'bg-emerald-500', text: 'text-emerald-700', border: 'border-emerald-200', bg: 'bg-emerald-50', label: 'Protected', pulse: false };
+    if (cryptoState.riskLevel >= 3) return { dot: 'bg-orange-500', text: 'text-orange-700', border: 'border-orange-200', bg: 'bg-orange-50', label: 'Verification Required', crypto: 'AES-256 + OTP + Key Rotation', pulse: true };
+    if (cryptoState.riskLevel === 2) return { dot: 'bg-amber-500',  text: 'text-amber-700',  border: 'border-amber-200',  bg: 'bg-amber-50',  label: 'Monitoring',             crypto: 'AES-256 + OTP Required',    pulse: true };
+    return { dot: 'bg-emerald-500', text: 'text-emerald-700', border: 'border-emerald-200', bg: 'bg-emerald-50', label: 'Protected', crypto: 'AES-256 Session Active', pulse: false };
   })();
 
   return (
@@ -1723,11 +1786,12 @@ export default function App() {
           </div>
         </div>
         <div className="flex items-center space-x-3">
-          {/* Security status pill — the only security indicator the customer sees */}
+          {/* Security status + crypto level */}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${secStatus.bg} ${secStatus.border} ${secStatus.text}`}>
             <span className={`w-2 h-2 rounded-full ${secStatus.dot} ${secStatus.pulse ? 'animate-pulse' : ''}`}></span>
             <span>{secStatus.label}</span>
           </div>
+          <div className="text-xs text-slate-400 font-mono hidden sm:block">{secStatus.crypto} · kv{cryptoState.keyVersion}</div>
           <div className="text-xs text-slate-500">Session: <span className="text-slate-600 font-mono">{formatTtl(sessionTtl)}</span></div>
           <button onClick={handleLogout} className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-colors" title="Sign Out">
             <LogOut size={16} />
@@ -2025,7 +2089,7 @@ export default function App() {
                       <div key={b.id} className="py-3 flex items-center justify-between first:pt-0 last:pb-0">
                         <div className="space-y-0.5">
                           <p className="text-xs font-semibold text-slate-900">{b.name}</p>
-                          <p className="text-xs text-slate-500 font-mono">{b.account}</p>
+                          <p className="text-xs text-slate-500 font-mono">{b.account_number}</p>
                         </div>
                         <span className="text-xs bg-slate-50 text-slate-500 border border-slate-200 px-2.5 py-1 rounded-full font-sans font-medium">
                           {b.bank_name}
