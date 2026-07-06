@@ -3,10 +3,11 @@ import {
   Shield, Landmark, LogOut, LayoutDashboard, Send, Users, 
   FileText, HelpCircle, Key, RefreshCw, AlertTriangle, CheckCircle, Lock, Info, Smartphone, X, ChevronDown, ChevronRight, Globe, Phone, Search, Menu
 } from 'lucide-react';
-import { 
-  loginCustomer, logoutCustomer, getAccountDetails, 
+import {
+  loginCustomer, logoutCustomer, getAccountDetails,
   getStatements, getBeneficiaries, addBeneficiary, transferMoney,
-  registerCustomer, sendOTP, verifyOTP, getMe, getRecoveryCard
+  registerCustomer, sendOTP, verifyOTP, getMe, getRecoveryCard,
+  challengeOtp, passwordReset, cardChallenge, tier4Verify, recoverySendOtp
 } from './api';
 import { useTelemetry } from './hooks/useTelemetry';
 import { usePreferences } from './Preferences';
@@ -120,15 +121,34 @@ export default function App() {
   // Transfer form state
   const [transferAmount, setTransferAmount] = useState('');
   const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState('');
+  const [payeeMode, setPayeeMode] = useState<'saved' | 'new'>('saved');
+  const [transferName, setTransferName] = useState('');
+  const [transferAccount, setTransferAccount] = useState('');
   const [transferStatus, setTransferStatus] = useState<any>(null); // { status: string, message: string }
   const [isTransferring, setIsTransferring] = useState(false);
-  
+
   // OTP step-up verification modal state
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [otpError, setOtpError] = useState('');
   const [simulatedSmsCode, setSimulatedSmsCode] = useState<string | null>(null);
   const [smsNotification, setSmsNotification] = useState<string | null>(null);
+  const [verifyBusy, setVerifyBusy] = useState(false);
+
+  // L3 password-reset modal
+  const [showPwResetModal, setShowPwResetModal] = useState(false);
+  const [pwResetOtp, setPwResetOtp] = useState('');
+  const [pwResetNew, setPwResetNew] = useState('');
+  const [pwResetError, setPwResetError] = useState('');
+
+  // L4 recovery wizard (card challenge)
+  const [recoveryPositions, setRecoveryPositions] = useState<string[] | null>(null);
+  const [recoveryOtp, setRecoveryOtp] = useState('');
+  const [recoveryAnswers, setRecoveryAnswers] = useState<Record<string, string>>({});
+  const [recoveryNewPw, setRecoveryNewPw] = useState('');
+  const [recoveryError, setRecoveryError] = useState('');
+  const [recoveryDevOtp, setRecoveryDevOtp] = useState<string | null>(null);
+  const [recoveryDone, setRecoveryDone] = useState<any>(null);
 
   // Add Beneficiary form state
   const [newPayeeName, setNewPayeeName] = useState('');
@@ -341,6 +361,22 @@ export default function App() {
     fetchData();
   }, [isAuthenticated, cryptoState.keyVersion, refreshTrigger]);
 
+  // Verification prompts are driven by the session risk level (persisted server-side),
+  // so the right prompt appears after login, refresh, or an escalating transfer.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (cryptoState.riskLevel === 2) { setShowPwResetModal(false); setShowOtpModal(true); }
+    else if (cryptoState.riskLevel === 3) { setShowOtpModal(false); setShowPwResetModal(true); }
+    else if (cryptoState.riskLevel === 1) { setShowOtpModal(false); setShowPwResetModal(false); }
+  }, [cryptoState.riskLevel, isAuthenticated]);
+
+  const handleResendCode = async () => {
+    try {
+      const r = await recoverySendOtp();
+      if (r.dev_otp) setSimulatedSmsCode(r.dev_otp);
+    } catch (e) { /* surfaced via modal error on submit */ }
+  };
+
   const triggerKeyDesyncError = () => {
     alert("Cryptographic integrity check failed: Session keys have desynchronized. Security audit initiated.");
     handleLogout();
@@ -357,6 +393,8 @@ export default function App() {
     try {
       const data = await loginCustomer(username, password);
       sessionStorage.setItem('cbi_auth_token', data.token);
+      // If we sign back in mid-challenge, the server re-issues a code — keep it for the modal.
+      if (data.dev_otp) setSimulatedSmsCode(data.dev_otp);
       setCryptoState({
         aesKey: data.aes_key,
         keyVersion: data.key_version,
@@ -414,45 +452,66 @@ export default function App() {
     }, 2500);
   };
 
+  // Apply a recovery response: adopt the rotated key, drop back to L1, surface any completed transfer.
+  const applyRecoveryResult = (res: any) => {
+    setCryptoState(prev => ({
+      ...prev,
+      aesKey: res.new_key || res.aes_key || prev.aesKey,
+      keyVersion: res.new_key_version || prev.keyVersion,
+      sessionId: res.session_id || prev.sessionId,
+      riskLevel: 1,
+    }));
+    setSessionTtl(600);
+    if (res.completed_transfer) {
+      setTransferStatus({ status: 'approved',
+        message: `Identity confirmed. Your transfer of ₹${Number(res.completed_transfer.amount).toLocaleString('en-IN')} to ${res.completed_transfer.beneficiary_name} is complete.` });
+    } else {
+      setTransferStatus({ status: 'approved', message: 'Identity confirmed. Your account is fully restored.' });
+    }
+    setTransferAmount(''); setSelectedBeneficiaryId(''); setTransferName(''); setTransferAccount('');
+    setRefreshTrigger(prev => prev + 1);
+  };
+
   const handleTransferSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBeneficiaryId || !transferAmount) return;
-    
+    const usingSaved = payeeMode === 'saved';
+    if (usingSaved && !selectedBeneficiaryId) return;
+    if (!usingSaved && (!transferName.trim() || !transferAccount.trim())) return;
+    if (!transferAmount) return;
+
     const amountNum = parseFloat(transferAmount);
-    if (isNaN(amountNum) || amountNum <= 0) {
-      alert("Invalid transfer amount");
-      return;
-    }
+    if (isNaN(amountNum) || amountNum <= 0) { alert("Please enter a valid amount."); return; }
 
     setIsTransferring(true);
     setTransferStatus(null);
 
-    // Find if payee is new in this session
+    // Saved payee id>2 (or a free-form recipient) counts as a new/unknown beneficiary for risk.
     const selectedPayee = beneficiaries.find(b => String(b.id) === String(selectedBeneficiaryId));
-    const isNew = selectedPayee ? selectedPayee.id > 2 : false; // Mock new payees added during simulation
+    const isNew = usingSaved ? (selectedPayee ? selectedPayee.id > 2 : false) : true;
 
     try {
-      const res = await transferMoney(cryptoState, amountNum, selectedBeneficiaryId, isNew);
-      
-      // Check if key shuffled
+      const res = usingSaved
+        ? await transferMoney(cryptoState, amountNum, selectedBeneficiaryId, isNew)
+        : await transferMoney(cryptoState, amountNum, null, true, transferName.trim(), transferAccount.trim());
+
       if (res.key_rotated && res.new_key) {
-        animateKeyRotation(res.new_key, res.new_key_version, res.risk_level);
+        // adopt rotated key immediately so the recovery calls encrypt/authorise correctly
+        setCryptoState(prev => ({ ...prev, aesKey: res.new_key, keyVersion: res.new_key_version, riskLevel: res.risk_level }));
       }
 
-      if (res.status === 'challenged') {
-        // Step-up challenge required. Generate OTP and notify.
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        setSimulatedSmsCode(code);
+      if (res.status === 'challenged') {           // L2 → OTP
+        setOtpCode(''); setOtpError('');
+        setSimulatedSmsCode(res.dev_otp || null);
         setShowOtpModal(true);
-        // Display toast to simulate SMS arrival
-        setSmsNotification(`OTP Code: ${code} - Verification for transfer request of $${amountNum}`);
-        setTimeout(() => setSmsNotification(null), 10000);
-      } else if (res.status === 'blocked') {
+      } else if (res.status === 'restricted') {     // L3 → OTP + new password
+        setPwResetOtp(''); setPwResetNew(''); setPwResetError('');
+        setSimulatedSmsCode(res.dev_otp || null);
+        setShowPwResetModal(true);
+      } else if (res.status === 'blocked') {         // L4 → full lockout recovery
         setCryptoState(prev => ({ ...prev, riskLevel: 4 }));
       } else {
         setTransferStatus({ status: 'approved', message: res.message });
-        setTransferAmount('');
-        setSelectedBeneficiaryId('');
+        setTransferAmount(''); setSelectedBeneficiaryId(''); setTransferName(''); setTransferAccount('');
         setRefreshTrigger(prev => prev + 1);
       }
     } catch (err: any) {
@@ -460,26 +519,64 @@ export default function App() {
       if (err.response?.status === 409) {
         triggerKeyDesyncError();
       } else {
-        alert(err.response?.data?.detail || "Transfer rejected");
+        alert(err.response?.data?.detail || "We couldn't process this transfer. Please try again.");
       }
     } finally {
       setIsTransferring(false);
     }
   };
 
-  const handleOtpVerify = (e: React.FormEvent) => {
+  // L2 CHALLENGE — verify the emailed OTP, which completes the parked transfer.
+  const handleOtpVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otpCode === simulatedSmsCode) {
-      setShowOtpModal(false);
-      setTransferStatus({ status: 'approved', message: "Transfer verified & completed successfully via Step-up OTP." });
-      setTransferAmount('');
-      setSelectedBeneficiaryId('');
-      setOtpCode('');
-      setOtpError('');
-      setRefreshTrigger(prev => prev + 1);
-    } else {
-      setOtpError('Invalid cryptographic code. Authentication rejected.');
+    setVerifyBusy(true); setOtpError('');
+    try {
+      const res = await challengeOtp(otpCode.trim());
+      setShowOtpModal(false); setOtpCode('');
+      applyRecoveryResult(res);
+    } catch (err: any) {
+      setOtpError(err.response?.data?.detail || 'That code was not correct. Please try again.');
+    } finally { setVerifyBusy(false); }
+  };
+
+  // L3 RESTRICT — OTP + new password lifts the restriction and completes the transfer.
+  const handlePwReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVerifyBusy(true); setPwResetError('');
+    try {
+      const res = await passwordReset(pwResetOtp.trim(), pwResetNew);
+      setShowPwResetModal(false); setPwResetOtp(''); setPwResetNew('');
+      applyRecoveryResult(res);
+    } catch (err: any) {
+      setPwResetError(err.response?.data?.detail || 'Verification failed. Please check your code and password.');
+    } finally { setVerifyBusy(false); }
+  };
+
+  // L4 CONTAIN — request the card-coordinate challenge (also emails an OTP).
+  const startCardChallenge = async () => {
+    setRecoveryError('');
+    try {
+      const res = await cardChallenge();
+      setRecoveryPositions(res.positions);
+      setRecoveryAnswers({});
+      setRecoveryOtp(''); setRecoveryNewPw('');
+      setRecoveryDevOtp(res.dev_otp || null);
+    } catch (err: any) {
+      setRecoveryError(err.response?.data?.detail || 'Could not start verification. Please try again.');
     }
+  };
+
+  const handleTier4Verify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVerifyBusy(true); setRecoveryError('');
+    try {
+      const res = await tier4Verify(recoveryOtp.trim(), recoveryAnswers, recoveryNewPw);
+      setRecoveryDone(res.completed_transfer || { restored: true });
+      setRecoveryPositions(null);
+      applyRecoveryResult(res);
+    } catch (err: any) {
+      setRecoveryError(err.response?.data?.detail || 'Verification failed. Please check the details and try again.');
+    } finally { setVerifyBusy(false); }
   };
 
   const handleAddPayee = async (e: React.FormEvent) => {
@@ -645,33 +742,89 @@ export default function App() {
     if (!keyBase64) return '';
     return keyBase64.slice(0, 8) + ' •••••••••••••••• ' + keyBase64.slice(-8);
   };
+  // Auto-rotate slides
+  useEffect(() => {
+    if (isAuthenticated) return;
+    const timer = setInterval(() => {
+      setCurrentSlide(prev => (prev + 1) % bannerSlides.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [isAuthenticated]);
 
-  // Session protected screen (containment) — customer-facing, no technical detail
+  // Session secured (Tier 4 containment) — customer must confirm identity with OTP + Recovery Card.
   if (cryptoState.riskLevel >= 4) {
     return (
-      <div className="flex h-screen bg-white font-sans items-center justify-center p-6" style={{ fontFamily: 'Inter, Arial, sans-serif' }}>
-        <div className="max-w-md w-full text-center space-y-6">
-          <div className="w-20 h-20 rounded-full bg-red-50 border-2 border-red-200 grid place-items-center mx-auto">
-            <Lock size={36} className="text-red-500" />
+      <div className="flex min-h-screen bg-slate-50 font-sans items-center justify-center p-6" style={{ fontFamily: 'Inter, Arial, sans-serif' }}>
+        <div className="max-w-lg w-full bg-white border border-slate-200 rounded-2xl shadow-xl p-8 space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-red-50 border border-red-200 grid place-items-center shrink-0">
+              <Lock size={26} className="text-red-600" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900">Account Secured</h1>
+              <p className="text-sm text-slate-500 mt-0.5">We paused your session to protect you. Confirm your identity to restore access.</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Session Secured</h1>
-            <p className="text-gray-500 mt-2 leading-relaxed">
-              We detected unusual activity and automatically secured your account.<br/>
-              This is to protect you from unauthorised access.
-            </p>
+
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-700 flex items-center gap-3">
+            <CheckCircle size={18} className="shrink-0 text-emerald-600" />
+            <span>Your money is safe. Any pending transfer will complete only after you verify.</span>
           </div>
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-700 flex items-center gap-3">
-            <CheckCircle size={18} className="shrink-0 text-green-500" />
-            <span>Your account and funds are safe. No transactions were affected.</span>
-          </div>
-          <p className="text-sm text-gray-400">Please sign in again to continue banking.</p>
-          <button onClick={handleLogout}
-            className="w-full py-3 rounded-xl font-semibold text-sm text-slate-900 transition-all"
-            style={{ background: 'linear-gradient(135deg, #003893, #0052cc)' }}>
-            Sign In Again
-          </button>
-          <p className="text-xs text-gray-400">Central Bank of India · AURA Security</p>
+
+          {!recoveryPositions ? (
+            <div className="space-y-4">
+              <ol className="text-sm text-slate-600 space-y-2 list-decimal pl-5">
+                <li>We'll email you a one-time verification code.</li>
+                <li>You'll read two digits from your printed Recovery Card.</li>
+                <li>You'll set a new password to finish.</li>
+              </ol>
+              {recoveryError && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{recoveryError}</div>}
+              <button onClick={startCardChallenge}
+                className="w-full py-3 rounded-xl font-semibold text-base text-white transition-all hover:opacity-95"
+                style={{ background: 'linear-gradient(135deg, #003893, #0052cc)' }}>
+                Begin Identity Verification
+              </button>
+              <button onClick={handleLogout} className="w-full text-sm text-slate-400 hover:text-slate-600">Sign out instead</button>
+            </div>
+          ) : (
+            <form onSubmit={handleTier4Verify} className="space-y-4">
+              {recoveryDevOtp && (
+                <div className="text-xs bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-slate-500">
+                  Demo mode — emailed code: <span className="font-mono font-bold text-slate-700">{recoveryDevOtp}</span>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-600">Email verification code</label>
+                <input value={recoveryOtp} onChange={e => setRecoveryOtp(e.target.value)} inputMode="numeric" placeholder="6-digit code"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-base font-mono tracking-widest focus:outline-none focus:border-teal-500" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-600">Recovery Card digits</label>
+                <p className="text-xs text-slate-400">Enter the digit printed at each cell of your Recovery Card.</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {recoveryPositions.map(pos => (
+                    <div key={pos} className="flex items-center gap-2">
+                      <span className="w-12 shrink-0 text-center font-mono font-bold text-teal-700 bg-teal-50 border border-teal-200 rounded-lg py-2">{pos}</span>
+                      <input value={recoveryAnswers[pos] || ''} maxLength={1} inputMode="numeric"
+                        onChange={e => setRecoveryAnswers(a => ({ ...a, [pos]: e.target.value.replace(/\D/g, '') }))}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-center text-lg font-mono focus:outline-none focus:border-teal-500" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-600">New password</label>
+                <input type="password" value={recoveryNewPw} onChange={e => setRecoveryNewPw(e.target.value)} placeholder="At least 14 characters"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-base focus:outline-none focus:border-teal-500" />
+              </div>
+              {recoveryError && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{recoveryError}</div>}
+              <button type="submit" disabled={verifyBusy}
+                className="w-full py-3 rounded-xl font-semibold text-base text-white bg-teal-600 hover:bg-teal-700 disabled:bg-slate-200 disabled:text-slate-400 transition-colors">
+                {verifyBusy ? 'Verifying…' : 'Confirm Identity & Restore Access'}
+              </button>
+            </form>
+          )}
+          <p className="text-xs text-slate-400 text-center">Central Bank of India · Secure Banking</p>
         </div>
       </div>
     );
@@ -704,14 +857,7 @@ export default function App() {
     { alt: 'Education Loan', image: educationLoanImg, gradient: 'from-purple-700 to-purple-900', text: 'Vidyarthi Education Loan\nInvest in Your Future', icon: '🎓' },
   ];
 
-  // Auto-rotate slides
-  useEffect(() => {
-    if (isAuthenticated) return;
-    const timer = setInterval(() => {
-      setCurrentSlide(prev => (prev + 1) % bannerSlides.length);
-    }, 4000);
-    return () => clearInterval(timer);
-  }, [isAuthenticated]);
+  // Auto-rotate slides moved to top
 
   // Whats New items
   const whatsNewItems = [
@@ -1738,44 +1884,67 @@ export default function App() {
               )}
 
               <form onSubmit={handleTransferSubmit} className="bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-xl">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Select Payee</label>
-                  <select 
-                    value={selectedBeneficiaryId}
-                    onChange={(e) => setSelectedBeneficiaryId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-teal-400"
-                  >
-                    <option value="">-- Choose a Beneficiary --</option>
-                    {beneficiaries.map((b: any) => (
-                      <option key={b.id} value={b.id}>{b.name} ({b.bank_name})</option>
-                    ))}
-                  </select>
+                {/* Payee mode toggle */}
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg">
+                  <button type="button" onClick={() => setPayeeMode('saved')}
+                    className={`py-2 rounded-md text-sm font-semibold transition-colors ${payeeMode==='saved'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>
+                    Saved payee
+                  </button>
+                  <button type="button" onClick={() => setPayeeMode('new')}
+                    className={`py-2 rounded-md text-sm font-semibold transition-colors ${payeeMode==='new'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>
+                    New recipient
+                  </button>
                 </div>
 
+                {payeeMode === 'saved' ? (
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Select Payee</label>
+                    <select
+                      value={selectedBeneficiaryId}
+                      onChange={(e) => setSelectedBeneficiaryId(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-base focus:outline-none focus:border-teal-500"
+                    >
+                      <option value="">— Choose a beneficiary —</option>
+                      {beneficiaries.map((b: any) => (
+                        <option key={b.id} value={b.id}>{b.name} ({b.bank_name})</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Recipient Name</label>
+                      <input type="text" placeholder="e.g. Rahul Verma" value={transferName}
+                        onChange={(e) => setTransferName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-base focus:outline-none focus:border-teal-500" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Account Number</label>
+                      <input type="text" placeholder="e.g. CBI-30045069783" value={transferAccount}
+                        onChange={(e) => setTransferAccount(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-base font-mono focus:outline-none focus:border-teal-500" />
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Transfer Amount ($)</label>
-                  <input 
+                  <label className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Amount (₹)</label>
+                  <input
                     type="number"
                     step="0.01"
                     placeholder="0.00"
                     value={transferAmount}
                     onChange={(e) => setTransferAmount(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-teal-400 font-mono"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-base focus:outline-none focus:border-teal-500 font-mono"
                   />
                 </div>
 
-                {cryptoState.riskLevel >= 3 && (
-                  <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg text-xs text-orange-300 flex items-center gap-2">
-                    <AlertTriangle size={14} className="shrink-0" />
-                    <span>Some transfers are temporarily restricted while we verify your identity.</span>
-                  </div>
-                )}
                 <button
                   type="submit"
-                  disabled={isTransferring || !selectedBeneficiaryId || !transferAmount}
-                  className="w-full py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-100 disabled:text-slate-500 text-white font-bold text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
+                  disabled={isTransferring || !transferAmount || (payeeMode==='saved' ? !selectedBeneficiaryId : (!transferName.trim() || !transferAccount.trim()))}
+                  className="w-full py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-100 disabled:text-slate-500 text-white font-bold text-base rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
-                  {isTransferring ? 'Processing transfer...' : 'Send Money'}
+                  {isTransferring ? 'Processing transfer…' : 'Send Money'}
                 </button>
               </form>
             </div>
@@ -2074,33 +2243,99 @@ export default function App() {
 
       {/* Security verification OTP modal */}
       {showOtpModal && (
-        <div className="fixed inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-          <div className="max-w-md w-full bg-white border border-slate-200 rounded-xl p-6 shadow-2xl space-y-5">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl space-y-5">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-500/20 grid place-items-center">
-                <Shield size={18} className="text-amber-700" />
+              <div className="w-11 h-11 rounded-full bg-amber-50 border border-amber-200 grid place-items-center">
+                <Shield size={20} className="text-amber-700" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-slate-900">Security Verification</h3>
-                <p className="text-xs text-slate-500">We need to confirm it's you</p>
+                <h3 className="text-lg font-bold text-slate-900">Confirm this transfer</h3>
+                <p className="text-sm text-slate-500">A one-time code was emailed to you</p>
               </div>
             </div>
             <p className="text-sm text-slate-500 leading-relaxed">
-              To complete this transfer, please enter the 6-digit code sent to your registered mobile number.
+              Enter the 6-digit code we sent to your registered email to complete your transfer.
             </p>
+            {simulatedSmsCode ? (
+              <div className="text-xs bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-slate-500">
+                Demo mode — emailed code: <span className="font-mono font-bold text-slate-700">{simulatedSmsCode}</span>
+              </div>
+            ) : (
+              <button type="button" onClick={handleResendCode}
+                className="text-sm font-semibold text-teal-700 hover:text-teal-800">Send a code to my email</button>
+            )}
             {otpError && (
-              <div className="p-3 bg-red-50 border border-red-500/20 rounded-lg text-xs text-red-700 flex items-center gap-2">
-                <AlertTriangle size={14} className="shrink-0" /> Incorrect code. Please try again.
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center gap-2">
+                <AlertTriangle size={14} className="shrink-0" /> {otpError}
               </div>
             )}
             <form onSubmit={handleOtpVerify} className="space-y-4">
-              <input type="text" maxLength={6} placeholder="000000" value={otpCode}
-                onChange={e => setOtpCode(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-3 text-center text-lg font-bold font-mono text-slate-900 tracking-[0.4em] focus:outline-none focus:border-teal-400" />
-              <button type="submit" disabled={otpCode.length < 6}
-                className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-100 disabled:text-slate-500 text-white font-bold text-sm rounded-lg transition-colors">
-                Verify
+              <input type="text" maxLength={6} inputMode="numeric" placeholder="000000" value={otpCode}
+                onChange={e => setOtpCode(e.target.value.replace(/\D/g,''))}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-3 text-center text-xl font-bold font-mono text-slate-900 tracking-[0.4em] focus:outline-none focus:border-teal-500" />
+              <button type="submit" disabled={otpCode.length < 6 || verifyBusy}
+                className="w-full py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-100 disabled:text-slate-500 text-white font-bold text-base rounded-lg transition-colors">
+                {verifyBusy ? 'Verifying…' : 'Verify & Complete Transfer'}
               </button>
+              <div className="flex items-center justify-between">
+                <button type="button" onClick={handleResendCode} className="text-sm text-teal-700 hover:text-teal-800 font-semibold">Resend code</button>
+                <button type="button" onClick={() => setShowOtpModal(false)} className="text-sm text-slate-400 hover:text-slate-600">Not now</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showPwResetModal && (
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl space-y-5">
+            <div className="flex items-center space-x-3">
+              <div className="w-11 h-11 rounded-full bg-orange-50 border border-orange-200 grid place-items-center">
+                <Lock size={20} className="text-orange-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Reset your password</h3>
+                <p className="text-sm text-slate-500">A quick step to keep your account safe</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              For your security, please enter the emailed code and choose a new password. Your pending transfer will complete right after.
+            </p>
+            {simulatedSmsCode ? (
+              <div className="text-xs bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-slate-500">
+                Demo mode — emailed code: <span className="font-mono font-bold text-slate-700">{simulatedSmsCode}</span>
+              </div>
+            ) : (
+              <button type="button" onClick={handleResendCode}
+                className="text-sm font-semibold text-teal-700 hover:text-teal-800">Send a code to my email</button>
+            )}
+            {pwResetError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center gap-2">
+                <AlertTriangle size={14} className="shrink-0" /> {pwResetError}
+              </div>
+            )}
+            <form onSubmit={handlePwReset} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-600">Email verification code</label>
+                <input type="text" maxLength={6} inputMode="numeric" placeholder="000000" value={pwResetOtp}
+                  onChange={e => setPwResetOtp(e.target.value.replace(/\D/g,''))}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 px-4 text-base font-mono tracking-widest focus:outline-none focus:border-teal-500" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-600">New password</label>
+                <input type="password" placeholder="At least 14 characters" value={pwResetNew}
+                  onChange={e => setPwResetNew(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 px-4 text-base focus:outline-none focus:border-teal-500" />
+              </div>
+              <button type="submit" disabled={pwResetOtp.length < 6 || !pwResetNew || verifyBusy}
+                className="w-full py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-100 disabled:text-slate-500 text-white font-bold text-base rounded-lg transition-colors">
+                {verifyBusy ? 'Verifying…' : 'Reset & Complete Transfer'}
+              </button>
+              <div className="flex items-center justify-between">
+                <button type="button" onClick={handleResendCode} className="text-sm text-teal-700 hover:text-teal-800 font-semibold">Resend code</button>
+                <button type="button" onClick={() => setShowPwResetModal(false)} className="text-sm text-slate-400 hover:text-slate-600">Not now</button>
+              </div>
             </form>
           </div>
         </div>

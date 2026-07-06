@@ -94,18 +94,11 @@ MODEL_REGISTRY_META = {
 
 MOCK_PAPERS = [
     {
-        "title": "Adversarial Threat Modeling in AI-Driven Transaction Processing Systems",
-        "authors": "G. Singh, A. Kumar",
-        "journal": "MNIT Security Conference 2026",
-        "abstract": "We analyze attack vector synthesis in deep tabular fraud detectors, demonstrating multi-stage key rotation mitigations.",
-        "citation": "Singh & Kumar (2026). MNIT-SC. pp. 12-25"
-    },
-    {
-        "title": "Real-time Keystroke Dynamics for Anti-Account Takeover Protection",
-        "authors": "M. Rostami, G. Singh",
-        "journal": "Journal of Cyber Security and AI",
-        "abstract": "Applying TabNet proxies to CMU Keystroke timing features. Outlines hold-time and latency correlation metrics.",
-        "citation": "Rostami & Singh (2026). JCSA, 8(3), 145-159"
+        "title": "BEACON: A Multimodal Dataset for Learning Behavioral Fingerprints from Gameplay Data",
+        "authors": "Ishpuneet Singh, Gursmeep Kaur, Uday Pratap Singh Atwal, Guramrit Singh, Gurjot Singh, Maninder Singh",
+        "journal": "arXiv:2605.10867",
+        "abstract": "Continuous authentication in high-stakes digital environments requires datasets with fine-grained behavioral signals under realistic cognitive and motor demands. But current benchmarks are often limited by small scale, unimodal sensing or lack of synchronised environmental context. To address this gap, this paper introduces BEACON (Behavioral Engine for Authentication & Continuous Monitoring), a large-scale multimodal dataset that captures diverse skill tiers in competitive Valorant gameplay. BEACON contains approximately 430 GB of synchronised modality data (461 GB total on-disk including auxiliary Valorant configuration captures) from 79 sessions across 28 distinct players, estimated at 102.51 hours of active gameplay, including high-frequency mouse dynamics, keystroke events, network packet captures, screen recordings, hardware metadata, and in-game configuration context. BEACON leverages the high precision motor skills and high cognitive load that are inherent to tactical shooters, making it a rigorous stress test for the robustness of behavioral biometrics. The dataset allows for the study of continuous authentication, behavioral profiling, user drift and multimodal representation learning in a high-fidelity esports setting. The authors release the dataset and code on Hugging Face and GitHub to create a reproducible benchmark for evaluating next-generation behavioral fingerprinting and security models.",
+        "citation": "Singh et al. (2026). arXiv:2605.10867 [cs.CR]"
     }
 ]
 

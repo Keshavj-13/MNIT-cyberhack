@@ -96,6 +96,32 @@ export async function getMe(): Promise<any> {
   return res.data;
 }
 
+// --- Escalation recovery (plaintext; auth via Bearer/cookie) ---
+export async function recoverySendOtp(): Promise<any> {
+  const res = await axios.post(`${API_BASE}/customer/auth/recovery/send-otp`, {});
+  return res.data;
+}
+
+export async function challengeOtp(otp: string): Promise<any> {
+  const res = await axios.post(`${API_BASE}/customer/auth/challenge-otp`, { otp });
+  return res.data;
+}
+
+export async function passwordReset(otp: string, newPassword: string): Promise<any> {
+  const res = await axios.post(`${API_BASE}/customer/auth/password-reset`, { otp, new_password: newPassword });
+  return res.data;
+}
+
+export async function cardChallenge(): Promise<any> {
+  const res = await axios.post(`${API_BASE}/customer/auth/card-challenge`, {});
+  return res.data;
+}
+
+export async function tier4Verify(otp: string, answers: Record<string, string>, newPassword: string): Promise<any> {
+  const res = await axios.post(`${API_BASE}/customer/auth/tier4-verify`, { otp, answers, new_password: newPassword });
+  return res.data;
+}
+
 export async function getAccountDetails(cryptoState: CryptoState): Promise<any> {
   return makeEncryptedRequest('/customer/account', {}, cryptoState);
 }
@@ -125,11 +151,19 @@ export async function transferMoney(
   cryptoState: CryptoState,
   amount: number,
   beneficiaryId: any,
-  isNew: boolean
+  isNew: boolean,
+  beneficiaryName?: string,
+  accountNumber?: string
 ): Promise<any> {
   return makeEncryptedRequest(
     '/customer/transfer',
-    { amount, beneficiary_id: beneficiaryId, is_new_beneficiary: isNew },
+    {
+      amount,
+      beneficiary_id: beneficiaryId,
+      is_new_beneficiary: isNew,
+      ...(beneficiaryName ? { beneficiary_name: beneficiaryName } : {}),
+      ...(accountNumber ? { account_number: accountNumber } : {}),
+    },
     cryptoState
   );
 }

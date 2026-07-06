@@ -31,7 +31,7 @@ const T: Record<string, any> = {
 };
 
 axios.defaults.withCredentials = true;
-const API_BASE = `${window.location.protocol}//${window.location.hostname}:8002`;
+const API_BASE = '';
 
 // Provider display metadata — no emoji, short label only
 const PROVIDER_META: Record<string, { short: string }> = {
@@ -77,14 +77,8 @@ export default function App() {
   const [acknowledgedSessionIds, setAcknowledgedSessionIds] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('acknowledged_sessions');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed;
-        }
-      }
-    } catch (e) {}
-    return [];
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
   });
   const [flashingSessionId, setFlashingSessionId] = useState<string | null>(null);
   const prevKeyVersions = useRef<Record<string, number>>({});

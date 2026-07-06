@@ -8,7 +8,7 @@ import {
 import { usePreferences } from './Preferences';
 
 axios.defaults.withCredentials = true;
-const API_BASE = `${window.location.protocol}//${window.location.hostname}:8003`;
+const API_BASE = '';
 
 const T: Record<string, any> = {
   en: { header_title: 'MNIT Threat Simulator', header_sub: 'Adversarial Operations Console', logout: 'Close Console' },
@@ -18,7 +18,7 @@ const T: Record<string, any> = {
 const SCENARIOS = [
   { key: 'normal_customer',  label: 'Normal Customer',    icon: User,           accent: 'emerald', desc: 'Baseline: no attack.' },
   { key: 'elderly_victim',   label: 'Elderly Victim',     icon: AlertTriangle,  accent: 'amber',   desc: 'Phishing link → fraudulent transfer.' },
-  { key: 'smishing_victim',  label: 'Phishing Victim',    icon: Mail,           accent: 'orange',  desc: 'Phishing link → credential harvest.' },
+  { key: 'phishing_victim',  label: 'Phishing Victim',    icon: Mail,           accent: 'orange',  desc: 'Phishing link → credential harvest.' },
   { key: 'account_takeover', label: 'Account Takeover',   icon: UserX,          accent: 'red',     desc: 'Impossible travel → device exploit.' },
   { key: 'full_fraud_chain', label: 'Full Fraud Chain',   icon: Flame,          accent: 'red',     desc: 'Complete LURE→HOOK→EXPLOIT→MONETIZE.' },
 ];
@@ -28,7 +28,7 @@ const PHASE_COLORS: Record<string, string> = {
   HOOK: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
   EXPLOIT: 'text-red-400 bg-red-500/10 border-red-500/20',
   MONETIZE: 'text-red-500 bg-red-600/10 border-red-600/30',
-  NEUTRAL: 'text-neutral-400 bg-neutral-700/30 border-white/[0.06]',
+  NEUTRAL: 'text-slate-600 bg-slate-100 border-slate-200',
 };
 
 const LEVEL_META = [
@@ -42,7 +42,7 @@ function RiskBar({ value, max = 1 }: { value: number; max?: number }) {
   const pct = Math.min(100, (value / max) * 100);
   const color = pct > 70 ? 'bg-red-500' : pct > 40 ? 'bg-orange-400' : pct > 20 ? 'bg-amber-400' : 'bg-emerald-400';
   return (
-    <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
       <div className={`h-full ${color} rounded-full transition-all duration-700`} style={{ width: `${pct}%` }} />
     </div>
   );
@@ -89,11 +89,21 @@ export default function App() {
   };
 
   const [liveMode, setLiveMode] = useState(false);
+  const [targetUser, setTargetUser] = useState('keshav');
+  const [availableUsers, setAvailableUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (auth) {
+      axios.get(`${API_BASE}/attacker/users`)
+        .then(res => setAvailableUsers(res.data))
+        .catch(() => setAvailableUsers([{username: 'keshav'}]));
+    }
+  }, [auth]);
 
   const runScenario = async (key: string) => {
     setRunning(key); setResult(null); setAnimStep(-1);
     const endpoint = liveMode
-      ? `${API_BASE}/attacker/scenarios/${key}/run-live`
+      ? `${API_BASE}/attacker/scenarios/${key}/run-live?target_user=${targetUser}`
       : `${API_BASE}/attacker/scenarios/${key}/run`;
     try {
       const res = await axios.post(endpoint);
@@ -104,11 +114,7 @@ export default function App() {
         setAnimStep(i);
       }
     } catch (e: any) {
-      if (liveMode && e.response?.status === 404) {
-        alert('LIVE MODE: demo_keshav must be logged into the Customer Portal first.');
-      } else {
-        alert('Scenario failed');
-      }
+      alert(e.response?.data?.detail || 'Scenario failed');
     }
     finally { setRunning(null); }
   };
@@ -123,29 +129,29 @@ export default function App() {
   };
 
   if (!auth) return (
-    <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-6">
-      <div className="w-full max-w-sm bg-neutral-900 border border-white/[0.06] rounded-xl p-8 space-y-6">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+      <div className="w-full max-w-sm bg-white border border-slate-200 rounded-xl p-8 space-y-6">
         <div className="flex flex-col items-center gap-2">
           <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 grid place-items-center animate-pulse">
             <Flame size={24} />
           </div>
-          <h1 className="text-lg font-bold text-white uppercase tracking-tight">Controlled Attack Console</h1>
-          <p className="text-xs text-neutral-500 text-center">Adversarial simulation for MNIT threat model validation</p>
+          <h1 className="text-lg font-bold text-slate-900 uppercase tracking-tight">Controlled Attack Console</h1>
+          <p className="text-xs text-slate-500 text-center">Adversarial simulation for MNIT threat model validation</p>
         </div>
         <form onSubmit={login} className="space-y-4">
           {err && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-3">{err}</p>}
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Simulator ID</label>
+            <label className="text-sm font-bold text-slate-500 uppercase tracking-wider">Simulator ID</label>
             <input value={user} onChange={e => setUser(e.target.value)} placeholder="attacker"
-              className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-4 py-2 text-xs text-white focus:outline-none focus:border-red-500/40" />
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-xs text-slate-900 focus:outline-none focus:border-red-500/40" />
           </div>
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Passkey</label>
+            <label className="text-sm font-bold text-slate-500 uppercase tracking-wider">Passkey</label>
             <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••"
-              className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-4 py-2 text-xs text-white focus:outline-none focus:border-red-500/40" />
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-xs text-slate-900 focus:outline-none focus:border-red-500/40" />
           </div>
           <button disabled={loading} type="submit"
-            className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-lg transition-colors uppercase tracking-wider">
+            className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-slate-900 font-bold text-xs rounded-lg transition-colors uppercase tracking-wider">
             {loading ? 'Connecting...' : 'Establish Connection'}
           </button>
         </form>
@@ -159,26 +165,26 @@ export default function App() {
   const breached = finalStep && finalStep.result.escalation_level <= 2;
 
   return (
-    <div className="flex h-screen bg-neutral-950 text-white flex-col">
+    <div className="flex h-screen bg-slate-50 text-slate-900 flex-col">
       {/* Header */}
-      <header className="border-b border-white/[0.06] px-6 py-3 flex items-center justify-between shrink-0">
+      <header className="border-b border-slate-200 px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 grid place-items-center text-red-400">
             <Flame size={16} />
           </div>
           <div>
-            <h1 className="font-bold text-sm text-white">{t('header_title')}</h1>
-            <p className="text-[9px] text-neutral-500 uppercase tracking-widest font-mono">{t('header_sub')}</p>
+            <h1 className="font-bold text-sm text-slate-900">{t('header_title')}</h1>
+            <p className="text-xs text-slate-500 uppercase tracking-widest font-mono">{t('header_sub')}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-[10px] font-mono bg-red-500/10 border border-red-500/20 text-red-400 px-3 py-1 rounded-full">sim_* namespace isolated</span>
-          <div className="flex bg-neutral-900 border border-white/[0.06] rounded-lg p-1 text-[9px] font-bold">
+          <span className="text-sm font-mono bg-red-500/10 border border-red-500/20 text-red-400 px-3 py-1 rounded-full">sim_* namespace isolated</span>
+          <div className="flex bg-white border border-slate-200 rounded-lg p-1 text-xs font-bold">
             {['en','hi'].map(l => (
-              <button key={l} onClick={() => pref.setLang(l)} className={`px-2 py-0.5 rounded uppercase ${pref.lang===l?'bg-red-600 text-white':'text-neutral-400 hover:text-white'}`}>{l}</button>
+              <button key={l} onClick={() => pref.setLang(l)} className={`px-2 py-0.5 rounded uppercase ${pref.lang===l?'bg-red-600 text-slate-900':'text-slate-600 hover:text-slate-900'}`}>{l}</button>
             ))}
           </div>
-          <button onClick={logout} className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-white bg-neutral-900 border border-white/[0.06] hover:bg-neutral-800 px-3 py-1.5 rounded-lg">
+          <button onClick={logout} className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:bg-slate-100 px-3 py-1.5 rounded-lg">
             <LogOut size={12}/>{t('logout')}
           </button>
         </div>
@@ -186,14 +192,14 @@ export default function App() {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
-        <aside className="w-52 border-r border-white/[0.06] flex flex-col shrink-0 p-3 gap-1">
+        <aside className="w-52 border-r border-slate-200 flex flex-col shrink-0 p-3 gap-1">
           {[
             { id: 'chain', icon: Target, label: 'Kill Chain' },
             { id: 'custom', icon: Sliders, label: 'Custom Vector' },
           ].map(({ id, icon: Icon, label }) => (
             <button key={id} onClick={() => setActiveTab(id as any)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                activeTab === id ? 'bg-red-500/10 text-red-400' : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
+                activeTab === id ? 'bg-red-500/10 text-red-400' : 'text-slate-600 hover:text-slate-900 hover:bg-white/[0.04]'
               }`}>
               <Icon size={16}/><span>{label}</span>
             </button>
@@ -204,21 +210,36 @@ export default function App() {
         {activeTab === 'chain' && (
           <div className="flex-1 flex overflow-hidden">
             {/* Scenario picker */}
-            <div className="w-64 border-r border-white/[0.06] flex flex-col shrink-0 p-4 gap-2 overflow-y-auto">
+            <div className="w-64 border-r border-slate-200 flex flex-col shrink-0 p-4 gap-2 overflow-y-auto">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[9px] text-neutral-500 uppercase font-bold tracking-wider">Select Scenario</p>
+                <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">Select Scenario</p>
                 <button
                   onClick={() => setLiveMode(v => !v)}
-                  className={`text-[9px] font-bold px-2 py-1 rounded border uppercase tracking-wider transition-all ${
+                  className={`text-xs font-bold px-2 py-1 rounded border uppercase tracking-wider transition-all ${
                     liveMode
-                      ? 'bg-red-600 border-red-500 text-white animate-pulse'
-                      : 'bg-neutral-800 border-white/[0.1] text-neutral-400 hover:text-white'
+                      ? 'bg-red-600 border-red-500 text-slate-900 animate-pulse'
+                      : 'bg-slate-100 border-white/[0.1] text-slate-600 hover:text-slate-900'
                   }`}
-                  title={liveMode ? 'LIVE: targets real demo_keshav session' : 'ISOLATED: uses sim_* session'}
+                  title={liveMode ? `LIVE: targets real ${targetUser} session` : 'ISOLATED: uses sim_* session'}
                 >
                   {liveMode ? '⚡ LIVE' : 'SIM'}
                 </button>
               </div>
+              {liveMode && (
+                <div className="mb-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Target Account</label>
+                  <select
+                    value={targetUser}
+                    onChange={(e) => setTargetUser(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded px-2 py-2 text-xs text-slate-900 focus:outline-none focus:border-red-500/40"
+                  >
+                    {availableUsers.map(u => (
+                      <option key={u.username} value={u.username}>{u.username} (Live User)</option>
+                    ))}
+                    <option value="sim_target">sim_target (Sandbox)</option>
+                  </select>
+                </div>
+              )}
               {SCENARIOS.map(s => {
                 const Icon = s.icon;
                 const isRunning = running === s.key;
@@ -227,13 +248,13 @@ export default function App() {
                   <button key={s.key} onClick={() => !running && runScenario(s.key)} disabled={!!running}
                     className={`w-full text-left p-3 rounded-xl border transition-all ${
                       isDone ? 'border-red-500/30 bg-red-500/5' :
-                      'border-white/[0.06] bg-neutral-900/40 hover:bg-neutral-800/60'
+                      'border-slate-200 bg-white/40 hover:bg-slate-100/60'
                     } disabled:opacity-40`}>
                     <div className="flex items-center gap-2 mb-1">
                       {isRunning ? <Loader2 size={14} className="animate-spin text-red-400"/> : <Icon size={14} className={`text-${s.accent}-400`}/>}
                       <span className={`text-xs font-bold text-${s.accent}-300`}>{s.label}</span>
                     </div>
-                    <p className="text-[10px] text-neutral-500 leading-snug">{s.desc}</p>
+                    <p className="text-sm text-slate-500 leading-snug break-words">{s.desc}</p>
                   </button>
                 );
               })}
@@ -242,7 +263,7 @@ export default function App() {
             {/* Kill chain results */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {!result && !running && (
-                <div className="h-full flex flex-col items-center justify-center text-neutral-600 gap-3">
+                <div className="h-full flex flex-col items-center justify-center text-slate-600 gap-3">
                   <Target size={40} className="opacity-20"/>
                   <p className="text-xs font-mono">Select a scenario to simulate an attack chain</p>
                 </div>
@@ -258,13 +279,13 @@ export default function App() {
               {result && (
                 <>
                   {/* Header */}
-                  <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-200">
                     <div>
-                      <h2 className="text-lg font-bold text-white">{scenarioMeta?.label}</h2>
-                      <p className="text-[10px] font-mono mt-0.5">
+                      <h2 className="text-lg font-bold text-slate-900">{scenarioMeta?.label}</h2>
+                      <p className="text-sm font-mono mt-0.5">
           {(result as any).live
-            ? <span className="text-red-400 font-bold">LIVE TARGET: demo_keshav · {result.steps.length} steps · real session</span>
-            : <span className="text-neutral-500">DEMO SESSION · {result.steps.length} steps · isolated namespace</span>
+            ? <span className="text-red-400 font-bold">LIVE TARGET: {result.userId} · {result.steps.length} steps · real session</span>
+            : <span className="text-slate-500">DEMO SESSION · {result.steps.length} steps · isolated namespace</span>
           }
         </p>
                     </div>
@@ -279,12 +300,12 @@ export default function App() {
                   </div>
 
                   {/* Risk escalation bar */}
-                  <div className="bg-neutral-900 border border-white/[0.04] rounded-xl p-4 space-y-3">
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="text-sm font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
                         <TrendingUp size={11}/> Risk Escalation Across Steps
                       </span>
-                      <span className="text-xs font-mono text-neutral-400">peak {(maxRisk * 100).toFixed(0)}/100</span>
+                      <span className="text-xs font-mono text-slate-600">peak {(maxRisk * 100).toFixed(0)}/100</span>
                     </div>
                     <div className="flex items-end gap-1.5 h-16">
                       {result.steps.map((s, i) => {
@@ -292,7 +313,7 @@ export default function App() {
                         const color = s.result.overall_risk > 0.7 ? 'bg-red-500' : s.result.overall_risk > 0.4 ? 'bg-orange-400' : s.result.overall_risk > 0.2 ? 'bg-amber-400' : 'bg-emerald-400';
                         return (
                           <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                            <span className="text-[8px] font-mono text-neutral-500">{(s.result.overall_risk * 100).toFixed(0)}</span>
+                            <span className="text-sm font-mono text-slate-500">{(s.result.overall_risk * 100).toFixed(0)}</span>
                             <div className={`w-full rounded-t-sm transition-all duration-700 ${color} ${i <= animStep ? 'opacity-100' : 'opacity-10'}`} style={{ height: `${h}%` }}/>
                           </div>
                         );
@@ -300,7 +321,7 @@ export default function App() {
                     </div>
                     <div className="flex gap-1.5">
                       {result.steps.map((_, i) => (
-                        <div key={i} className="flex-1 text-center text-[8px] text-neutral-600 font-mono">S{i+1}</div>
+                        <div key={i} className="flex-1 text-center text-sm text-slate-600 font-mono">S{i+1}</div>
                       ))}
                     </div>
                   </div>
@@ -321,8 +342,8 @@ export default function App() {
                           <div className="flex gap-3">
                             {/* Step indicator */}
                             <div className="flex flex-col items-center">
-                              <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold font-mono shrink-0 ${
-                                visible ? `${lvl.bg} border-current` : 'border-neutral-700 text-neutral-700'
+                              <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center text-sm font-bold font-mono shrink-0 ${
+                                visible ? `${lvl.bg} border-current` : 'border-slate-700 text-slate-700'
                               } ${lvl.color}`}>
                                 {i + 1}
                               </div>
@@ -332,17 +353,17 @@ export default function App() {
                             </div>
 
                             {/* Card */}
-                            <div className={`flex-1 mb-2 bg-neutral-900 border rounded-xl p-4 space-y-3 ${visible ? 'border-white/[0.06]' : 'border-white/[0.02]'}`}>
+                            <div className={`flex-1 mb-2 bg-white border rounded-xl p-4 space-y-3 ${visible ? 'border-slate-200' : 'border-slate-200'}`}>
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1">
-                                  <p className="text-xs font-semibold text-white leading-snug">{step.label}</p>
-                                  <p className="text-[10px] text-neutral-500 mt-0.5 italic">"{step.result.why_decision}"</p>
+                                  <p className="text-xs font-semibold text-slate-900 leading-snug">{step.label}</p>
+                                  <p className="text-sm text-slate-500 mt-0.5 italic">"{step.result.why_decision}"</p>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   {phase !== 'NEUTRAL' && (
-                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded border uppercase ${PHASE_COLORS[phase]}`}>{phase}</span>
+                                    <span className={`text-xs font-bold px-2 py-0.5 rounded border uppercase ${PHASE_COLORS[phase]}`}>{phase}</span>
                                   )}
-                                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold ${lvl.bg} ${lvl.color}`}>
+                                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-sm font-bold ${lvl.bg} ${lvl.color}`}>
                                     <LvlIcon size={11}/>
                                     {lvl.label}
                                   </div>
@@ -351,7 +372,7 @@ export default function App() {
 
                               {/* Risk bar */}
                               <div className="space-y-1">
-                                <div className="flex justify-between text-[9px] font-mono text-neutral-500">
+                                <div className="flex justify-between text-xs font-mono text-slate-500">
                                   <span>risk</span><span>{(step.result.overall_risk * 100).toFixed(1)}/100</span>
                                 </div>
                                 <RiskBar value={step.result.overall_risk}/>
@@ -359,11 +380,11 @@ export default function App() {
 
                               {/* Provider mini-grid */}
                               {step.result.provider_breakdown && (
-                                <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-white/[0.04]">
+                                <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-200">
                                   {Object.entries(step.result.provider_breakdown).map(([name, d]: [string, any]) => (
-                                    <div key={name} className={`rounded-lg px-2 py-1.5 ${d.risk_score > 0.5 ? 'bg-red-500/10 border border-red-500/20' : 'bg-neutral-950'}`}>
-                                      <p className="text-[8px] text-neutral-500 truncate">{name.replace('Provider','').replace('RiskProvider','').replace('Risk','')}</p>
-                                      <p className={`text-[10px] font-mono font-bold ${d.risk_score > 0.7 ? 'text-red-400' : d.risk_score > 0.4 ? 'text-amber-400' : 'text-neutral-500'}`}>
+                                    <div key={name} className={`rounded-lg px-2 py-1.5 ${d.risk_score > 0.5 ? 'bg-red-500/10 border border-red-500/20' : 'bg-slate-50'}`}>
+                                      <p className="text-sm text-slate-500 truncate">{name.replace('Provider','').replace('RiskProvider','').replace('Risk','')}</p>
+                                      <p className={`text-sm font-mono font-bold ${d.risk_score > 0.7 ? 'text-red-400' : d.risk_score > 0.4 ? 'text-amber-400' : 'text-slate-500'}`}>
                                         {(d.risk_score * 100).toFixed(0)}
                                       </p>
                                     </div>
@@ -386,20 +407,20 @@ export default function App() {
                           <p className={`text-sm font-bold ${breached ? 'text-red-300' : 'text-teal-300'}`}>
                             {breached ? 'Attack Partially Succeeded' : 'Attack Successfully Contained'}
                           </p>
-                          <p className="text-[10px] text-neutral-500 mt-0.5">{finalStep.result.recommendation}</p>
+                          <p className="text-sm text-slate-500 mt-0.5">{finalStep.result.recommendation}</p>
                         </div>
                       </div>
                       <div className="grid grid-cols-3 gap-3 font-mono text-center">
-                        <div className="bg-neutral-950/50 rounded-lg p-2">
-                          <p className="text-[9px] text-neutral-500 uppercase">Peak Risk</p>
-                          <p className="text-lg font-bold text-white">{(maxRisk * 100).toFixed(0)}</p>
+                        <div className="bg-slate-50/50 rounded-lg p-2">
+                          <p className="text-xs text-slate-500 uppercase">Peak Risk</p>
+                          <p className="text-lg font-bold text-slate-900">{(maxRisk * 100).toFixed(0)}</p>
                         </div>
-                        <div className="bg-neutral-950/50 rounded-lg p-2">
-                          <p className="text-[9px] text-neutral-500 uppercase">Final Decision</p>
+                        <div className="bg-slate-50/50 rounded-lg p-2">
+                          <p className="text-xs text-slate-500 uppercase">Final Decision</p>
                           <p className={`text-sm font-bold ${breached ? 'text-red-400' : 'text-teal-400'}`}>{finalStep.result.decision}</p>
                         </div>
-                        <div className="bg-neutral-950/50 rounded-lg p-2">
-                          <p className="text-[9px] text-neutral-500 uppercase">Escalation</p>
+                        <div className="bg-slate-50/50 rounded-lg p-2">
+                          <p className="text-xs text-slate-500 uppercase">Escalation</p>
                           <p className={`text-lg font-bold ${LEVEL_META[Math.min(finalStep.result.escalation_level-1,3)].color}`}>
                             L{finalStep.result.escalation_level}
                           </p>
@@ -418,41 +439,41 @@ export default function App() {
         {activeTab === 'custom' && (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-5xl mx-auto space-y-6">
-              <header className="pb-4 border-b border-white/[0.06]">
+              <header className="pb-4 border-b border-slate-200">
                 <h2 className="text-lg font-bold">Custom Threat Vector</h2>
-                <p className="text-xs text-neutral-500 mt-1">Compose any combination of attack signals and see which ML models fire.</p>
+                <p className="text-xs text-slate-500 mt-1">Compose any combination of attack signals and see which ML models fire.</p>
               </header>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                <form onSubmit={evalCustom} className="bg-neutral-900 border border-white/[0.06] rounded-xl p-5 space-y-4">
-                  <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Attack Parameters</h3>
+                <form onSubmit={evalCustom} className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+                  <h3 className="text-sm font-bold text-slate-600 uppercase tracking-wider">Attack Parameters</h3>
 
                   <div className="grid grid-cols-2 gap-3">
                     {[['user_id','User ID'],['session_id','Session ID']].map(([k,l]) => (
                       <div key={k} className="space-y-1">
-                        <label className="text-[9px] text-neutral-500 font-bold uppercase">{l}</label>
+                        <label className="text-xs text-slate-500 font-bold uppercase">{l}</label>
                         <input value={(cp as any)[k]} onChange={e => setCp({...cp,[k]:e.target.value})}
-                          className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-red-500/30"/>
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 font-mono focus:outline-none focus:border-red-500/30"/>
                       </div>
                     ))}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-[9px] text-neutral-500 font-bold uppercase">Amount ($)</label>
+                      <label className="text-xs text-slate-500 font-bold uppercase">Amount ($)</label>
                       <input type="number" value={cp.amount} onChange={e => setCp({...cp, amount: parseFloat(e.target.value)||0})}
-                        className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-red-500/30"/>
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 font-mono focus:outline-none focus:border-red-500/30"/>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[9px] text-neutral-500 font-bold uppercase">Phishing URL</label>
+                      <label className="text-xs text-slate-500 font-bold uppercase">Phishing URL</label>
                       <input value={cp.current_url} onChange={e => setCp({...cp, current_url: e.target.value})}
                         placeholder="http://secure-bank.phish.ru/..."
-                        className="w-full bg-neutral-950 border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-red-500/30"/>
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 font-mono focus:outline-none focus:border-red-500/30"/>
                     </div>
                   </div>
 
-                  <div className="border-t border-white/[0.04] pt-3 space-y-2">
-                    <p className="text-[9px] font-bold text-neutral-500 uppercase">Attack Flags</p>
+                  <div className="border-t border-slate-200 pt-3 space-y-2">
+                    <p className="text-xs font-bold text-slate-500 uppercase">Attack Flags</p>
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         ['is_new_beneficiary','New Payee'],['login_anomaly','Login Anomaly'],
@@ -460,27 +481,27 @@ export default function App() {
                       ].map(([k,l]) => (
                         <label key={k} className="flex items-center gap-2 cursor-pointer">
                           <input type="checkbox" checked={(cp as any)[k]} onChange={e => setCp({...cp,[k]:e.target.checked})}
-                            className="rounded border-white/[0.08] bg-neutral-950 text-red-600 focus:ring-0"/>
-                          <span className="text-[10px] text-neutral-400 font-semibold uppercase select-none">{l}</span>
+                            className="rounded border-slate-200 bg-slate-50 text-red-600 focus:ring-0"/>
+                          <span className="text-sm text-slate-600 font-semibold uppercase select-none">{l}</span>
                         </label>
                       ))}
                     </div>
                   </div>
 
                   <button type="submit" disabled={evalLoading}
-                    className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-lg uppercase tracking-wider flex items-center justify-center gap-2 transition-colors">
+                    className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-slate-900 font-bold text-xs rounded-lg uppercase tracking-wider flex items-center justify-center gap-2 transition-colors">
                     {evalLoading ? <><Loader2 size={13} className="animate-spin"/> Evaluating...</> : <><Zap size={13}/> Evaluate Threat Vector</>}
                   </button>
                 </form>
 
                 {/* Result */}
-                <div className="bg-neutral-900 border border-white/[0.06] rounded-xl p-5 space-y-4 min-h-[300px] flex flex-col">
-                  <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
+                <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 min-h-[300px] flex flex-col">
+                  <h3 className="text-sm font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
                     <Activity size={12} className="text-red-400"/> Live Model Response
                   </h3>
 
                   {!customResult && !evalLoading && (
-                    <div className="flex-1 flex items-center justify-center border border-dashed border-white/[0.06] rounded-xl text-neutral-600 text-xs">
+                    <div className="flex-1 flex items-center justify-center border border-dashed border-slate-200 rounded-xl text-slate-600 text-xs">
                       Compose vectors and fire evaluation
                     </div>
                   )}
@@ -500,23 +521,23 @@ export default function App() {
                           <LvlIcon size={20}/>
                           <div>
                             <p className="font-bold text-sm">{customResult.decision} — Level {customResult.escalation_level}</p>
-                            <p className="text-[10px] opacity-70">{customResult.recommendation}</p>
+                            <p className="text-sm opacity-70">{customResult.recommendation}</p>
                           </div>
                           <span className="ml-auto font-mono font-bold text-xl">{((customResult.overall_risk||0)*100).toFixed(0)}</span>
                         </div>
 
                         <div className="space-y-1">
                           <RiskBar value={customResult.overall_risk||0}/>
-                          <p className="text-[10px] text-neutral-500 italic">"{customResult.why_decision}"</p>
+                          <p className="text-sm text-slate-500 italic">"{customResult.why_decision}"</p>
                         </div>
 
                         <div className="space-y-1.5">
-                          <p className="text-[9px] font-bold text-neutral-500 uppercase">Provider Scores</p>
+                          <p className="text-xs font-bold text-slate-500 uppercase">Provider Scores</p>
                           {Object.entries(customResult.provider_breakdown||{}).map(([name, d]: [string,any]) => (
                             <div key={name} className="flex items-center gap-3">
-                              <span className="text-[9px] text-neutral-400 w-36 truncate">{name.replace('Provider','').replace('Risk','')}</span>
+                              <span className="text-xs text-slate-600 w-36 truncate">{name.replace('Provider','').replace('Risk','')}</span>
                               <div className="flex-1"><RiskBar value={d.risk_score||0}/></div>
-                              <span className={`text-[10px] font-mono font-bold w-8 text-right ${d.risk_score>0.5?'text-red-400':'text-neutral-500'}`}>
+                              <span className={`text-sm font-mono font-bold w-8 text-right ${d.risk_score>0.5?'text-red-400':'text-slate-500'}`}>
                                 {((d.risk_score||0)*100).toFixed(0)}
                               </span>
                             </div>

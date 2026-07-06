@@ -132,7 +132,7 @@ def jwt_decode(token: str, secret: str) -> dict:
             
     return payload
 
-def create_jwt_token(subject: str, surface: str, expires_in_minutes: int = 60, extra_claims: dict = None) -> str:
+def create_jwt_token(subject: str, surface: str, expires_in_minutes: int = 1440, extra_claims: dict = None) -> str:
     """Create a signed JWT token for a specific surface."""
     secret = JWT_SECRETS[surface]
     now = time.time()

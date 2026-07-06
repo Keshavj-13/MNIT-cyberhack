@@ -50,13 +50,19 @@ def attacker_login(payload: Dict[str, str] = Body(...), response: Response = Res
     if username != _att_user or password != _att_pass:
         raise HTTPException(status_code=401, detail="Invalid simulator credentials")
 
-    token = create_jwt_token(username, "attacker", expires_in_minutes=60)
+    token = create_jwt_token(username, "attacker")
     response.set_cookie(
         key="attacker_session", value=token, httponly=True,
         secure=os.environ.get("SECURE_COOKIES", "false").lower() == "true",
         samesite="strict", path="/attacker"
     )
     return {"status": "success", "username": username}
+
+@app.get("/attacker/users")
+def get_users(db: Session = Depends(get_db), attacker = Depends(get_current_attacker)):
+    from src.db.models import User
+    users = db.query(User).all()
+    return [{"id": u.id, "username": u.username} for u in users]
 
 @app.post("/attacker/auth/logout")
 def attacker_logout(attacker = Depends(get_current_attacker), response: Response = Response(), db: Session = Depends(get_db)):
@@ -85,7 +91,7 @@ DEMO_SCENARIOS: Dict[str, List[Dict[str, Any]]] = {
         {"label": "Customer clicks a suspicious link received via message.", "payload": {"url": PHISHING_URL}},
         {"label": "Customer authorizes a 'verification transfer' of $250 to a new payee.", "payload": {"amount": 250, "is_new_beneficiary": True, "url": PHISHING_URL}},
     ],
-    "smishing_victim": [
+    "phishing_victim": [
         {"label": "Customer logs in normally.", "payload": {}},
         {"label": "Customer clicks a phishing link in a spoofed bank alert.", "payload": {"url": PHISHING_URL}},
         {"label": "Stolen credentials are used to log in from a new device.", "payload": {"login_anomaly": True, "new_device": True, "url": PHISHING_URL}},
@@ -199,7 +205,7 @@ def run_demo_scenario(name: str, db: Session = Depends(get_db), attacker = Depen
         is_anomaly = False
         if name == "elderly_victim" and step_idx == 2:
             is_anomaly = True
-        elif name == "smishing_victim" and step_idx >= 2:
+        elif name == "phishing_victim" and step_idx >= 2:
             is_anomaly = True
         elif name == "account_takeover":
             is_anomaly = True
@@ -208,7 +214,10 @@ def run_demo_scenario(name: str, db: Session = Depends(get_db), attacker = Depen
 
         # 3. Generate and POST encrypted telemetry package to production ingest pipeline
         telemetry_payload = generate_simulated_telemetry(step_idx, is_anomaly, sim_session_id, cust_session.aes_key)
-        customer_telemetry(telemetry_payload, db)
+        try:
+            customer_telemetry(telemetry_payload, db)
+        except HTTPException as e:
+            pass # Session was likely contained/revoked in a previous step, ignore telemetry injection failure
 
         # 4. Inject scenario hooks (phishing, SMS flags)
         if "sms_text" in step["payload"]:
@@ -252,8 +261,8 @@ def run_demo_scenario(name: str, db: Session = Depends(get_db), attacker = Depen
 
 
 @app.post("/attacker/scenarios/{name}/run-live")
-def run_live_scenario(name: str, db: Session = Depends(get_db), attacker = Depends(get_current_attacker)):
-    """Run scenario against the REAL demo_keshav session so all three surfaces synchronize.
+def run_live_scenario(name: str, target_user: str = "keshav", db: Session = Depends(get_db), attacker = Depends(get_current_attacker)):
+    """Run scenario against the REAL keshav session so all three surfaces synchronize.
     Unlike run, this does NOT use sim_* isolation — events appear in admin Risk Dashboard
     and the customer AURA console reacts (key rotation, trust level change).
     """
@@ -264,17 +273,27 @@ def run_live_scenario(name: str, db: Session = Depends(get_db), attacker = Depen
     if name not in DEMO_SCENARIOS:
         raise HTTPException(status_code=404, detail=f"Unknown scenario: {name}")
 
-    # Target the real demo_keshav session — no sim_ prefix
-    LIVE_USER = "demo_keshav"
+    # Target the real user session — no sim_ prefix
+    LIVE_USER = target_user
     cust_session = db.query(CustomerSession).filter(
         CustomerSession.user_id == LIVE_USER,
         CustomerSession.is_active == True
     ).order_by(CustomerSession.updated_at.desc()).first()
 
     if not cust_session:
-        raise HTTPException(status_code=404, detail="demo_keshav session not found. Customer must be logged in first.")
-
-    session_id = cust_session.session_id
+        import secrets
+        # Auto-create a session if not logged in
+        session_id = f"cust_sess_{secrets.token_hex(8)}"
+        cust_session = CustomerSession(
+            session_id=session_id,
+            user_id=LIVE_USER,
+            aes_key=secrets.token_hex(16),
+            is_active=True
+        )
+        db.add(cust_session)
+        db.commit()
+    else:
+        session_id = cust_session.session_id
 
     steps = []
     for step_idx, step in enumerate(DEMO_SCENARIOS[name]):
@@ -282,12 +301,15 @@ def run_live_scenario(name: str, db: Session = Depends(get_db), attacker = Depen
 
         is_anomaly = (name == "full_fraud_chain" and step_idx >= 2) or \
                      (name == "account_takeover") or \
-                     (name == "smishing_victim" and step_idx >= 2) or \
+                     (name == "phishing_victim" and step_idx >= 2) or \
                      (name == "elderly_victim" and step_idx == 2)
 
         # inject telemetry into the REAL session
         telemetry_payload = generate_simulated_telemetry(step_idx, is_anomaly, session_id, cust_session.aes_key)
-        customer_telemetry(telemetry_payload, db)
+        try:
+            customer_telemetry(telemetry_payload, db)
+        except HTTPException as e:
+            pass
 
         if "sms_text" in step["payload"]:
             db.add(TelemetryData(session_id=session_id, type="session", data={"type": "sms_received", "sms_text": step["payload"]["sms_text"]}))

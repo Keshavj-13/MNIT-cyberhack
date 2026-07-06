@@ -102,7 +102,7 @@ export default function ModelIntelligence() {
       return { label: 'ML Model Active', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
     }
     if (info.mode === 'rules') {
-      return { label: 'Rule-Based', color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' };
+      return { label: 'Rule-Based', color: 'bg-indigo-50 text-indigo-400 border-indigo-200' };
     }
     return { label: 'Fallback Mode', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' };
   };
@@ -113,18 +113,18 @@ export default function ModelIntelligence() {
     const max = Math.max(...entries.map(([, v]) => Math.abs(v)), 1e-9);
     return (
       <div className="space-y-3">
-        <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">{label}</h4>
+        <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest">{label}</h4>
         <div className="space-y-2">
           {entries.map(([k, v]) => (
             <div key={k} className="flex items-center gap-3">
-              <span className="text-[11px] font-mono text-neutral-400 w-40 truncate" title={k}>{k}</span>
-              <div className="flex-1 h-2 rounded-full bg-white/[0.04] overflow-hidden">
+              <span className="text-[11px] font-mono text-slate-600 w-40 truncate" title={k}>{k}</span>
+              <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
                 <div
                   className={`h-full rounded-full ${color}`}
                   style={{ width: `${Math.max((Math.abs(v) / max) * 100, 2)}%` }}
                 />
               </div>
-              <span className="text-[10px] font-mono text-neutral-500 w-16 text-right">{v.toFixed(4)}</span>
+              <span className="text-[10px] font-mono text-slate-500 w-16 text-right">{v.toFixed(4)}</span>
             </div>
           ))}
         </div>
@@ -135,21 +135,21 @@ export default function ModelIntelligence() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 pb-12">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/[0.06] pb-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
         <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
             <div className="p-2 rounded-xl bg-teal-500/10 text-teal-400 border border-teal-500/20">
               <Cpu size={24} />
             </div>
             Model Intelligence Portal
           </h1>
-          <p className="text-neutral-400 text-sm">
+          <p className="text-slate-600 text-sm">
             Live registry of every ML model backing AURA's risk providers — performance, explainability, inputs, and training provenance.
           </p>
         </div>
         <button
           onClick={fetchReports}
-          className="flex items-center justify-center gap-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/[0.12] px-5 py-2.5 text-sm font-semibold text-neutral-300 transition-all active:scale-95"
+          className="flex items-center justify-center gap-2 rounded-xl bg-white border border-slate-200 shadow-sm hover:bg-slate-50 border border-slate-200 hover:border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 transition-all active:scale-95"
         >
           <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
           Refresh
@@ -159,23 +159,23 @@ export default function ModelIntelligence() {
       {loading && reports.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-32 space-y-4">
           <RefreshCw size={48} className="animate-spin text-teal-400" />
-          <p className="text-neutral-300 font-medium">Loading model registry...</p>
+          <p className="text-slate-700 font-medium">Loading model registry...</p>
         </div>
       ) : error ? (
         <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-8 flex flex-col items-center text-center gap-4">
           <AlertTriangle className="text-rose-400" size={48} />
           <div>
-            <h3 className="text-lg font-bold text-rose-300">Registry Access Denied</h3>
-            <p className="text-sm text-neutral-400 max-w-md mt-2">{error}</p>
+            <h3 className="text-lg font-bold text-rose-700">Registry Access Denied</h3>
+            <p className="text-sm text-slate-600 max-w-md mt-2">{error}</p>
           </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Sidebar */}
           <div className="lg:col-span-3 space-y-4">
-            <div className="rounded-2xl border border-white/[0.06] bg-neutral-900/40 p-1.5 overflow-hidden">
-              <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-neutral-500">Live Models</span>
+            <div className="rounded-2xl border border-slate-200 bg-white border border-slate-200 shadow-sm p-1.5 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Live Models</span>
                 <span className="text-[11px] font-mono text-teal-500/80 bg-teal-500/5 px-2 py-0.5 rounded-full border border-teal-500/10">
                   {reports.length} Providers
                 </span>
@@ -189,8 +189,8 @@ export default function ModelIntelligence() {
                       onClick={() => setSelectedName(report.provider_name)}
                       className={`w-full text-left px-3.5 py-3 rounded-xl text-sm transition-all group ${
                         selectedName === report.provider_name
-                          ? 'bg-teal-500/10 text-teal-300 border border-teal-500/20 shadow-[0_0_20px_-12px_rgba(20,184,166,0.3)]'
-                          : 'text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.03] border border-transparent'
+                          ? 'bg-teal-500/10 text-teal-700 border border-teal-500/20 shadow-[0_0_20px_-12px_rgba(20,184,166,0.3)]'
+                          : 'text-slate-600 hover:text-slate-600 hover:bg-white shadow-sm border border-slate-200 border border-transparent'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -199,7 +199,7 @@ export default function ModelIntelligence() {
                       </div>
                       <div className="flex items-center gap-2 mt-1.5 opacity-80">
                         <span className={`text-[9px] uppercase tracking-tighter px-1.5 py-0.5 rounded border ${badge.color}`}>{badge.label}</span>
-                        <span className="text-[10px] text-neutral-500 font-mono">{report.model_type}</span>
+                        <span className="text-[10px] text-slate-500 font-mono">{report.model_type}</span>
                       </div>
                     </button>
                   );
@@ -213,7 +213,7 @@ export default function ModelIntelligence() {
             {selected && (
               <>
                 {/* Executive Header */}
-                <div className="rounded-2xl border border-white/[0.06] bg-neutral-900/20 p-8 relative overflow-hidden">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 border border-slate-200 p-8 relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none">
                     <Cpu size={160} />
                   </div>
@@ -223,20 +223,20 @@ export default function ModelIntelligence() {
                         <span className="px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-400 text-[10px] font-bold uppercase tracking-wider border border-teal-500/20">
                           {selected.risk_category}
                         </span>
-                        <span className="text-neutral-500 text-xs font-mono">
+                        <span className="text-slate-500 text-xs font-mono">
                           {selected.provider_name}
                         </span>
                       </div>
-                      <h2 className="text-4xl font-extrabold text-white tracking-tight leading-tight">
+                      <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight leading-tight">
                         {selected.display_name}
                       </h2>
-                      <p className="text-sm text-neutral-300 leading-relaxed border-l-2 border-teal-500/30 pl-4">
+                      <p className="text-sm text-slate-700 leading-relaxed border-l-2 border-teal-500/30 pl-4">
                         {selected.collection_description || "Provider description pending."}
                       </p>
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-2 text-right">
-                      <div className="text-[11px] font-bold uppercase tracking-widest text-neutral-500">Algorithm</div>
-                      <div className="px-4 py-2 rounded-xl border text-xl font-bold bg-indigo-500/10 text-indigo-300 border-indigo-500/20 font-mono">
+                      <div className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Algorithm</div>
+                      <div className="px-4 py-2 rounded-xl border text-xl font-bold bg-indigo-50 text-indigo-700 border-indigo-200 font-mono">
                         {selected.model_type}
                       </div>
                     </div>
@@ -244,7 +244,7 @@ export default function ModelIntelligence() {
                 </div>
 
                 {/* Tabs */}
-                <div className="flex p-1.5 rounded-2xl bg-neutral-900/40 border border-white/[0.06] overflow-x-auto custom-scrollbar">
+                <div className="flex p-1.5 rounded-2xl bg-white border border-slate-200 shadow-sm border border-slate-200 overflow-x-auto custom-scrollbar">
                   {[
                     { key: 'overview', label: 'Overview & Metrics', icon: Gauge },
                     { key: 'inputs', label: 'Inputs & Features', icon: Sliders },
@@ -256,8 +256,8 @@ export default function ModelIntelligence() {
                       onClick={() => setMainTab(tab.key as MainTab)}
                       className={`flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
                         mainTab === tab.key
-                          ? 'bg-neutral-800 text-teal-400 shadow-lg border border-white/[0.08]'
-                          : 'text-neutral-500 hover:text-neutral-300'
+                          ? 'bg-neutral-800 text-teal-400 shadow-lg border border-slate-200'
+                          : 'text-slate-500 hover:text-slate-700'
                       }`}
                     >
                       <tab.icon size={14} />
@@ -271,9 +271,9 @@ export default function ModelIntelligence() {
                   {mainTab === 'overview' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-500">
                       {/* Performance Metrics */}
-                      <div className="rounded-2xl border border-white/[0.06] bg-neutral-900/30 overflow-hidden">
-                        <div className="px-6 py-4 border-b border-white/[0.06] bg-white/[0.02]">
-                          <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-300 flex items-center gap-2">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-100 border border-slate-200 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-200 bg-slate-100">
+                          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-700 flex items-center gap-2">
                             <BarChart3 size={14} className="text-teal-400" />
                             Validation Performance
                           </h3>
@@ -294,17 +294,17 @@ export default function ModelIntelligence() {
                               ].filter((m) => m.value !== undefined && m.value !== null).map((m) => (
                                 <div
                                   key={m.label}
-                                  className={`text-center p-4 rounded-xl bg-black/30 border ${m.highlight ? 'border-teal-500/30 ring-1 ring-teal-500/20' : 'border-white/[0.04]'}`}
+                                  className={`text-center p-4 rounded-xl bg-black/30 border ${m.highlight ? 'border-teal-500/30 ring-1 ring-teal-500/20' : 'border-slate-200'}`}
                                 >
-                                  <div className={`text-2xl font-extrabold font-mono ${m.highlight ? 'text-teal-300' : 'text-teal-400'}`}>
+                                  <div className={`text-2xl font-extrabold font-mono ${m.highlight ? 'text-teal-700' : 'text-teal-400'}`}>
                                     {m.value!.toFixed(3)}
                                   </div>
-                                  <div className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mt-1">{m.label}</div>
+                                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-1">{m.label}</div>
                                 </div>
                               ))}
                             </div>
                           ) : (
-                            <div className="flex items-center gap-3 text-neutral-400 text-sm py-4">
+                            <div className="flex items-center gap-3 text-slate-600 text-sm py-4">
                               <Info size={16} className="text-indigo-400" />
                               No supervised validation metrics — this provider runs on deterministic rules, not a trained model.
                             </div>
@@ -313,9 +313,9 @@ export default function ModelIntelligence() {
                       </div>
 
                       {/* Deployment Status */}
-                      <div className="rounded-2xl border border-white/[0.06] bg-neutral-900/30 overflow-hidden">
-                        <div className="px-6 py-4 border-b border-white/[0.06] bg-white/[0.02]">
-                          <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-300 flex items-center gap-2">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-100 border border-slate-200 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-200 bg-slate-100">
+                          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-700 flex items-center gap-2">
                             <Activity size={14} className="text-teal-400" />
                             Deployment Status
                           </h3>
@@ -332,31 +332,31 @@ export default function ModelIntelligence() {
                               </div>
                             )}
                             <div>
-                              <h4 className="text-sm font-bold text-white">
+                              <h4 className="text-sm font-bold text-slate-900">
                                 {selected.model_info.mode === 'ml' ? 'Model Loaded & Serving' :
                                  selected.model_info.mode === 'rules' ? 'Rule Engine Active' : 'Fallback Heuristics Active'}
                               </h4>
-                              <p className="text-xs text-neutral-400 mt-0.5">{selected.model_info.note || '—'}</p>
+                              <p className="text-xs text-slate-600 mt-0.5">{selected.model_info.note || '—'}</p>
                             </div>
                           </div>
                           {selected.model_info.model_path && (
-                            <div className="flex justify-between items-center py-2 border-t border-white/[0.03]">
-                              <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Artifact Path</span>
+                            <div className="flex justify-between items-center py-2 border-t border-slate-200">
+                              <span className="text-[11px] font-bold text-slate-500 uppercase font-semibold tracking-wider">Artifact Path</span>
                               <span className="text-xs font-mono text-teal-400 truncate max-w-[220px]">{selected.model_info.model_path}</span>
                             </div>
                           )}
-                          <div className="flex justify-between items-center py-2 border-t border-white/[0.03]">
-                            <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Risk Category</span>
-                            <span className="text-xs font-mono text-neutral-200">{selected.risk_category}</span>
+                          <div className="flex justify-between items-center py-2 border-t border-slate-200">
+                            <span className="text-[11px] font-bold text-slate-500 uppercase font-semibold tracking-wider">Risk Category</span>
+                            <span className="text-xs font-mono text-slate-600">{selected.risk_category}</span>
                           </div>
-                          <div className="flex justify-between items-center py-2 border-t border-white/[0.03]">
-                            <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Feature Count</span>
-                            <span className="text-xs font-mono text-neutral-200">{selected.features ? selected.features.length : 'Text / N/A'}</span>
+                          <div className="flex justify-between items-center py-2 border-t border-slate-200">
+                            <span className="text-[11px] font-bold text-slate-500 uppercase font-semibold tracking-wider">Feature Count</span>
+                            <span className="text-xs font-mono text-slate-600">{selected.features ? selected.features.length : 'Text / N/A'}</span>
                           </div>
                           {selected.metrics?.n_train !== undefined && (
-                            <div className="flex justify-between items-center py-2 border-t border-white/[0.03]">
-                              <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Train / Test Rows</span>
-                              <span className="text-xs font-mono text-neutral-200">
+                            <div className="flex justify-between items-center py-2 border-t border-slate-200">
+                              <span className="text-[11px] font-bold text-slate-500 uppercase font-semibold tracking-wider">Train / Test Rows</span>
+                              <span className="text-xs font-mono text-slate-600">
                                 {selected.metrics.n_train?.toLocaleString()} / {selected.metrics.n_test?.toLocaleString()}
                               </span>
                             </div>
@@ -365,51 +365,51 @@ export default function ModelIntelligence() {
                       </div>
 
                       {/* Description */}
-                      <div className="rounded-2xl border border-white/[0.06] bg-neutral-900/30 overflow-hidden md:col-span-2">
-                        <div className="px-6 py-4 border-b border-white/[0.06] bg-white/[0.02] flex items-center gap-3">
-                          <div className="shrink-0 p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-100 border border-slate-200 overflow-hidden md:col-span-2">
+                        <div className="px-6 py-4 border-b border-slate-200 bg-slate-100 flex items-center gap-3">
+                          <div className="shrink-0 p-2 rounded-lg bg-indigo-50 text-indigo-400 border border-indigo-200">
                             <Target size={16} />
                           </div>
-                          <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-300">What This Model Decides</h3>
+                          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-700">What This Model Decides</h3>
                         </div>
                         <div className="p-6">
-                          <p className="text-sm text-neutral-300 leading-relaxed">{selected.input_description}</p>
+                          <p className="text-sm text-slate-700 leading-relaxed">{selected.input_description}</p>
                         </div>
                       </div>
                     </div>
                   )}
 
                   {mainTab === 'inputs' && (
-                    <div className="rounded-2xl border border-white/[0.06] bg-neutral-900/30 overflow-hidden animate-in slide-in-from-bottom-2 duration-500">
-                      <div className="px-6 py-5 border-b border-white/[0.06] bg-white/[0.01]">
-                        <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-300 flex items-center gap-2">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-100 border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-2 duration-500">
+                      <div className="px-6 py-5 border-b border-slate-200 bg-white shadow-sm border border-slate-200">
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-700 flex items-center gap-2">
                           <Sliders size={14} className="text-teal-400" />
                           Input Feature Schema
                         </h3>
-                        <p className="text-xs text-neutral-500 mt-2 max-w-3xl">{selected.collection_description}</p>
+                        <p className="text-xs text-slate-500 mt-2 max-w-3xl">{selected.collection_description}</p>
                       </div>
 
                       {selected.features ? (
                         <div className="overflow-x-auto custom-scrollbar">
                           <table className="w-full text-left border-collapse">
                             <thead>
-                              <tr className="bg-white/[0.03] text-[10px] uppercase tracking-widest text-neutral-500 font-bold border-b border-white/[0.06]">
+                              <tr className="bg-white shadow-sm border border-slate-200 text-[10px] uppercase tracking-widest text-slate-500 font-bold border-b border-slate-200">
                                 <th className="px-6 py-3 w-16">#</th>
                                 <th className="px-6 py-3">Feature Name</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-white/[0.03]">
+                            <tbody className="divide-y divide-slate-200">
                               {selected.features.map((f, i) => (
-                                <tr key={f} className="hover:bg-white/[0.01] transition-colors">
-                                  <td className="px-6 py-2.5 text-[11px] font-mono text-neutral-500">{i + 1}</td>
-                                  <td className="px-6 py-2.5 font-mono text-sm text-neutral-200">{f}</td>
+                                <tr key={f} className="hover:bg-white shadow-sm border border-slate-200 transition-colors">
+                                  <td className="px-6 py-2.5 text-[11px] font-mono text-slate-500">{i + 1}</td>
+                                  <td className="px-6 py-2.5 font-mono text-sm text-slate-600">{f}</td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
                         </div>
                       ) : (
-                        <div className="p-8 text-sm text-neutral-400">
+                        <div className="p-8 text-sm text-slate-600">
                           This provider does not consume a fixed tabular feature vector — see the description above for its raw input fields.
                         </div>
                       )}
@@ -419,12 +419,12 @@ export default function ModelIntelligence() {
                   {mainTab === 'explainability' && (
                     <div className="space-y-6 animate-in fade-in duration-500">
                       {selected.explainability ? (
-                        <div className="rounded-2xl border border-white/[0.06] bg-neutral-900/30 p-8 grid grid-cols-1 md:grid-cols-2 gap-10">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-100 border border-slate-200 p-8 grid grid-cols-1 md:grid-cols-2 gap-10">
                           {renderBarList(selected.explainability.shap, 'SHAP — Mean Absolute Impact', 'bg-purple-500')}
                           {renderBarList(selected.explainability.gain, 'Gain — Tree Split Importance', 'bg-teal-500')}
                         </div>
                       ) : (
-                        <div className="rounded-2xl border border-white/[0.06] bg-neutral-900/30 p-8 flex items-center gap-3 text-sm text-neutral-400">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-100 border border-slate-200 p-8 flex items-center gap-3 text-sm text-slate-600">
                           <Info size={16} className="text-indigo-400" />
                           No raw SHAP/gain values cached for this provider — see the visual plots from its training dataset below.
                         </div>
@@ -437,7 +437,7 @@ export default function ModelIntelligence() {
                               <HelpCircle size={15} />
                               SHAP Global Summary ({selected.dataset_name})
                             </h4>
-                            <div className="aspect-video border border-white/[0.06] bg-black/40 rounded-2xl p-4 flex justify-center items-center">
+                            <div className="aspect-video border border-slate-200 bg-white border border-slate-300 rounded-2xl p-4 flex justify-center items-center">
                               <img
                                 src={`/plots/${selected.dataset_name}/shap_summary.png`}
                                 alt="SHAP summary plot"
@@ -451,7 +451,7 @@ export default function ModelIntelligence() {
                               <BarChart3 size={15} />
                               Feature Importance ({selected.dataset_name})
                             </h4>
-                            <div className="aspect-video border border-white/[0.06] bg-black/40 rounded-2xl p-4 flex justify-center items-center">
+                            <div className="aspect-video border border-slate-200 bg-white border border-slate-300 rounded-2xl p-4 flex justify-center items-center">
                               <img
                                 src={`/plots/${selected.dataset_name}/feature_importance.png`}
                                 alt="Feature importance plot"
@@ -466,24 +466,24 @@ export default function ModelIntelligence() {
                   )}
 
                   {mainTab === 'training' && (
-                    <div className="rounded-2xl border border-white/[0.06] bg-neutral-900/30 p-10 animate-in zoom-in-95 duration-500">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-100 border border-slate-200 p-10 animate-in zoom-in-95 duration-500">
                       {selected.dataset_meta ? (
                         <div className="max-w-3xl space-y-8">
                           <div className="space-y-4">
                             <h3 className="text-xs font-bold uppercase tracking-widest text-teal-400">Training Dataset</h3>
-                            <h2 className="text-3xl font-bold text-white leading-tight">
+                            <h2 className="text-3xl font-bold text-slate-900 leading-tight">
                               {selected.dataset_meta.overview?.title || selected.dataset_meta.overview?.name}
                             </h2>
-                            <div className="flex flex-wrap gap-4 text-sm text-neutral-400 font-medium">
+                            <div className="flex flex-wrap gap-4 text-sm text-slate-600 font-medium">
                               <div className="flex items-center gap-1.5"><Database size={14} /> Domain: {selected.dataset_meta.overview?.domain}</div>
                               <div className="flex items-center gap-1.5"><Info size={14} /> Type: {selected.dataset_meta.overview?.data_type}</div>
                               <div className="flex items-center gap-1.5"><Activity size={14} /> License: {selected.dataset_meta.overview?.license}</div>
                             </div>
                           </div>
 
-                          <div className="space-y-4 pt-8 border-t border-white/[0.06]">
-                            <h4 className="text-xs font-bold uppercase tracking-widest text-neutral-500">Academic Citation</h4>
-                            <div className="p-6 rounded-2xl bg-black/40 border border-white/[0.04] font-mono text-sm text-neutral-300 leading-relaxed italic">
+                          <div className="space-y-4 pt-8 border-t border-slate-200">
+                            <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500">Academic Citation</h4>
+                            <div className="p-6 rounded-2xl bg-white border border-slate-300 border border-slate-200 font-mono text-sm text-slate-700 leading-relaxed italic">
                               &quot;{selected.dataset_meta.citation?.text || "Citation available in metadata directory."}&quot;
                             </div>
                           </div>
@@ -501,7 +501,7 @@ export default function ModelIntelligence() {
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-3 text-sm text-neutral-400">
+                        <div className="flex items-center gap-3 text-sm text-slate-600">
                           <Info size={16} className="text-indigo-400" />
                           This provider is rule-based and was not trained on a dataset.
                         </div>

@@ -55,13 +55,19 @@ def admin_login(payload: Dict[str, str] = Body(...), response: Response = Respon
     if username != _admin_user or password != _admin_pass:
         raise HTTPException(status_code=401, detail="Invalid administrator credentials")
 
-    token = create_jwt_token(username, "admin", expires_in_minutes=15)
+    token = create_jwt_token(username, "admin")
     response.set_cookie(
         key="admin_session", value=token, httponly=True,
         secure=os.environ.get("SECURE_COOKIES", "false").lower() == "true",
         samesite="strict", path="/admin"
     )
     return {"status": "success", "username": username}
+
+@app.get("/admin/users")
+def get_users(db: Session = Depends(get_db), admin = Depends(get_current_admin)):
+    from src.db.models import User
+    users = db.query(User).all()
+    return [{"id": u.id, "username": u.username} for u in users]
 
 @app.post("/admin/auth/logout")
 def admin_logout(admin = Depends(get_current_admin), response: Response = Response(), db: Session = Depends(get_db)):
@@ -228,11 +234,10 @@ def get_config(admin = Depends(get_current_admin)):
         "max_transfer_limit": 5000,
         "trust_recovery_speed": 1.0,
         "weights": {
-            "TransactionRiskProvider": 0.4,
-            "SocialEngineeringRiskProvider": 0.2,
-            "PhishingRiskProvider": 0.15,
-            "AccountTakeoverProvider": 0.15,
-            "DeviceTrustProvider": 0.1,
+            "TransactionRiskProvider": 0.45,
+            "SocialEngineeringRiskProvider": 0.20,
+            "AccountTakeoverProvider": 0.20,
+            "DeviceTrustProvider": 0.10,
             "BeaconBehavioralProvider": 0.05
         }
     }

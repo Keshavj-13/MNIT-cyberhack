@@ -44,6 +44,10 @@ def run():
     # 8003: Attacker API, 3003: Attacker UI
     # 8004: Showcase API, 3004: Showcase UI
 
+    # Seed demo data
+    print("[SYSTEM] Seeding demo database...")
+    subprocess.run([sys.executable, "seed_demo.py"], check=True)
+
     print("[SYSTEM] Starting MNIT Isolated Security Platform...")
     processes = []
     threads = []
@@ -63,7 +67,7 @@ def run():
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            shell=True
+            shell=False
         )
         processes.append((name, proc))
         # Start a reader thread to stream this backend's output to the console

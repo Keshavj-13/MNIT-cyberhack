@@ -73,12 +73,17 @@ class EncryptedPayload(BaseModel):
 # Helper to decrypt client payload
 def decrypt_payload(payload: EncryptedPayload, db: Session) -> Tuple[Dict[str, Any], CustomerSession]:
     cust_session = db.query(CustomerSession).filter(
-        CustomerSession.session_id == payload.session_id,
-        CustomerSession.is_active == True
+        CustomerSession.session_id == payload.session_id
     ).first()
     
     if not cust_session:
-        raise HTTPException(status_code=401, detail="Invalid, expired or inactive session key")
+        raise HTTPException(status_code=401, detail="Invalid session key")
+    
+    if not cust_session.is_active:
+        if cust_session.risk_level >= 4:
+            raise HTTPException(status_code=401, detail="Account locked out: Containment triggered")
+        else:
+            raise HTTPException(status_code=401, detail="Invalid, expired or inactive session key")
         
     if cust_session.key_version != payload.key_version:
         raise HTTPException(status_code=409, detail="Cryptographic key version mismatch: Key has been shuffled")
@@ -89,10 +94,13 @@ def decrypt_payload(payload: EncryptedPayload, db: Session) -> Tuple[Dict[str, A
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Decryption failed: {str(e)}")
 
-# Helper to encrypt response payload
-def encrypt_response(data: Any, cust_session: CustomerSession) -> Dict[str, Any]:
+# Helper to encrypt response payload.
+# IMPORTANT: encrypt with the key the CLIENT used for this request. If the key was
+# rotated during handling (escalation), the client still only holds the old key, so
+# the response — which carries the new key inside — must be readable with the old one.
+def encrypt_response(data: Any, cust_session: CustomerSession, key: str = None) -> Dict[str, Any]:
     plaintext = json.dumps(data)
-    encrypted = encrypt_aes_gcm(plaintext, cust_session.aes_key)
+    encrypted = encrypt_aes_gcm(plaintext, key or cust_session.aes_key)
     return {
         "session_id": cust_session.session_id,
         "key_version": cust_session.key_version,
@@ -424,7 +432,7 @@ def login(payload: Dict[str, str] = Body(...), response: Response = Response(), 
         latest_sess.is_active = True # Re-activate so token validation passes
         db.commit()
         
-        token = create_jwt_token(username, "customer", expires_in_minutes=30, extra_claims={"sid": latest_sess.session_id})
+        token = create_jwt_token(username, "customer", extra_claims={"sid": latest_sess.session_id})
         response.set_cookie(
             key="customer_session",
             value=token,
@@ -462,10 +470,22 @@ def login(payload: Dict[str, str] = Body(...), response: Response = Response(), 
     )
     db.add(cust_session)
     
+    # An unfinished L2/L3 verification must survive sign-out: carry the challenge
+    # onto the new session rather than silently dropping the customer back to L1.
+    resume_level = 1
+    resume_dev_otp = None
+    pending = _PENDING_TRANSFER.get(username)
+    if pending and pending.get("level") in (2, 3):
+        resume_level = pending["level"]
+        cust_session.risk_level = resume_level
+        code = _send_recovery_otp(user, db)
+        if os.environ.get("ALLOW_DEFAULT_SECRETS") == "1":
+            resume_dev_otp = code
+
     # Create signed customer JWT
-    token = create_jwt_token(username, "customer", expires_in_minutes=30, extra_claims={"sid": session_id})
+    token = create_jwt_token(username, "customer", extra_claims={"sid": session_id})
     db.commit()
-    
+
     # Set Path-scoped HTTP-Only secure cookie
     response.set_cookie(
         key="customer_session",
@@ -475,16 +495,19 @@ def login(payload: Dict[str, str] = Body(...), response: Response = Response(), 
         samesite="strict",
         path="/customer"
     )
-    
-    return {
+
+    resp = {
         "status": "success",
         "username": username,
         "session_id": session_id,
         "aes_key": aes_key,
-        "key_version": 1,
-        "risk_level": 1,
+        "key_version": cust_session.key_version,
+        "risk_level": resume_level,
         "token": token
     }
+    if resume_dev_otp:
+        resp["dev_otp"] = resume_dev_otp
+    return resp
 
 @app.post("/customer/auth/logout")
 def logout(user = Depends(get_current_user_payload), response: Response = Response(), db: Session = Depends(get_db)):
@@ -513,7 +536,10 @@ def me(user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
     session_id = user.get("sid")
     cust_session = db.query(CustomerSession).filter(CustomerSession.session_id == session_id).first()
     
-    if not cust_session or not cust_session.is_active:
+    if not cust_session:
+        raise HTTPException(status_code=401, detail="Session does not exist")
+        
+    if not cust_session.is_active and cust_session.risk_level < 4:
         raise HTTPException(status_code=401, detail="Session is inactive or has been rotated out")
         
     return {
@@ -596,7 +622,8 @@ def get_statements(payload: EncryptedPayload = Body(...), user = Depends(get_cur
 @app.post("/customer/beneficiaries")
 def get_beneficiaries(payload: EncryptedPayload = Body(...), user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
     decrypted_body, cust_session = decrypt_payload(payload, db)
-    
+    request_key = cust_session.aes_key  # response must stay readable with the client's request key
+
     # If it's a GET operation disguised as POST (decrypted_body is empty), return list
     # If it contains name/account/bank, add new beneficiary and run silent evaluation
     uid = user.get("sub", "")
@@ -643,8 +670,8 @@ def get_beneficiaries(payload: EncryptedPayload = Body(...), user = Depends(get_
             "new_key_version": new_version,
             "risk_level": eval_result.escalation_level
         }
-        return encrypt_response(response_data, cust_session)
-    return encrypt_response(blist, cust_session)
+        return encrypt_response(response_data, cust_session, request_key)
+    return encrypt_response(blist, cust_session, request_key)
 
 def _get_or_create_user_by_account(b_account: str, b_name: str, db: Session) -> str:
     # 1. First, check if b_account or b_name matches an existing username in the database directly
@@ -689,10 +716,109 @@ def _get_or_create_user_by_account(b_account: str, b_name: str, db: Session) -> 
     db.commit()
     return ghost_username
 
+# --- Escalation recovery plumbing ---------------------------------------
+# A transfer that gets challenged/restricted/contained is parked here per user
+# and completed verbatim once the customer clears the matching verification.
+_PENDING_TRANSFER: Dict[str, dict] = {}
+# Card-coordinate positions issued for a Tier-4 challenge, per user.
+_CARD_CHALLENGE: Dict[str, List[str]] = {}
+
+def _perform_transfer(uid: str, amount: float, beneficiary_id, body: dict, db: Session) -> str:
+    """Move the money: debit sender, credit recipient, write both ledgers. Returns payee name."""
+    b_name, b_account = "Unknown Transfer", None
+    if beneficiary_id is not None:
+        found = next((b for b in _get_beneficiaries(uid) if str(b["id"]) == str(beneficiary_id)), None)
+        if found:
+            b_name = found.get("name", "Unknown Transfer")
+            b_account = found.get("account_number")
+    else:
+        b_name = body.get("beneficiary_name") or body.get("name") or "Unknown Transfer"
+        b_account = body.get("account_number")
+
+    ua = _get_accounts(uid)
+    ua["checking"]["balance"] -= amount
+    ut = _get_transactions(uid)
+    ut.insert(0, {"id": len(ut) + 1, "date": datetime.datetime.utcnow().isoformat(),
+                  "description": f"Transfer to {b_name}", "amount": -amount, "type": "debit"})
+
+    if b_account:
+        try:
+            rec = _get_or_create_user_by_account(b_account, b_name, db)
+            ra = _get_accounts(rec)
+            ra["checking"]["balance"] += amount
+            rt = _get_transactions(rec)
+            rt.insert(0, {"id": len(rt) + 1, "date": datetime.datetime.utcnow().isoformat(),
+                          "description": f"Received transfer from {uid}", "amount": amount, "type": "credit"})
+        except Exception as e:
+            print(f"[RECIPIENT CREDIT ERROR] {str(e)}")
+    return b_name
+
+def _send_recovery_otp(db_user: User, db: Session) -> str:
+    """Issue a fresh security-challenge OTP to the user's email. Returns the code (for dev display)."""
+    otp_code = str(secrets.SystemRandom().randint(100000, 999999))
+    db.add(OTPVerification(identifier=db_user.email, otp_hash=hash_otp(otp_code),
+                           channel="email", purpose="security_challenge", attempts=0, is_used=False))
+    db.commit()
+    send_email_otp(db_user.email, otp_code)
+    return otp_code
+
+def _check_recovery_otp(db_user: User, otp_code: str, db: Session):
+    """Validate a security-challenge OTP for this user. Raises HTTPException on failure."""
+    rec = db.query(OTPVerification).filter(
+        OTPVerification.identifier == db_user.email,
+        OTPVerification.channel == "email",
+        OTPVerification.purpose == "security_challenge",
+        OTPVerification.is_used == False
+    ).order_by(OTPVerification.created_at.desc()).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="No pending verification. Please request a new code.")
+    if (datetime.datetime.utcnow() - rec.created_at).total_seconds() > 600:
+        rec.is_used = True; db.commit()
+        raise HTTPException(status_code=410, detail="Verification code has expired. Please request a new one.")
+    if rec.attempts >= 5:
+        rec.is_used = True; db.commit()
+        raise HTTPException(status_code=429, detail="Too many incorrect attempts. Please request a new code.")
+    if not verify_otp(otp_code, rec.otp_hash):
+        rec.attempts += 1; db.commit()
+        raise HTTPException(status_code=400, detail=f"Invalid code. {5 - rec.attempts} attempt(s) remaining.")
+    rec.is_used = True; db.commit()
+
+def _reset_and_resume(cust_session: CustomerSession, uid: str, db: Session) -> dict:
+    """Clear escalation: risk→L1, reactivate session, rotate key, and complete any parked transfer."""
+    new_key = generate_aes_key()
+    cust_session.aes_key = new_key
+    cust_session.key_version += 1
+    cust_session.risk_level = 1
+    cust_session.is_active = True
+    db.commit()
+    _CARD_CHALLENGE.pop(uid, None)
+    completed = None
+    pend = _PENDING_TRANSFER.pop(uid, None)
+    if pend:
+        name = _perform_transfer(uid, pend["amount"], pend.get("beneficiary_id"), pend.get("body", {}), db)
+        completed = {"amount": pend["amount"], "beneficiary_name": name}
+    return {
+        "status": "success",
+        "risk_level": 1,
+        "new_key": new_key,
+        "new_key_version": cust_session.key_version,
+        "session_id": cust_session.session_id,
+        "aes_key": new_key,
+        "completed_transfer": completed,
+    }
+
+def _session_from_token(user, db: Session) -> CustomerSession:
+    sid = user.get("sid")
+    cust_session = db.query(CustomerSession).filter(CustomerSession.session_id == sid).first()
+    if not cust_session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    return cust_session
+
 @app.post("/customer/transfer")
 def transfer(payload: EncryptedPayload = Body(...), user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
     decrypted_body, cust_session = decrypt_payload(payload, db)
-    
+    request_key = cust_session.aes_key  # key the client used — response must stay readable with it
+
     try:
         amount = float(decrypted_body.get("amount", 0))
     except (TypeError, ValueError):
@@ -725,77 +851,56 @@ def transfer(payload: EncryptedPayload = Body(...), user = Depends(get_current_u
         new_key, new_version = shuffle_session_key(cust_session, eval_result.escalation_level, db)
         key_rotated = True
         
-    # Standardised response messages, absolutely no scores or internal metadata.
-    if eval_result.escalation_level == 1:
+    # Standardised, customer-facing messages — no scores or internal metadata.
+    level = eval_result.escalation_level
+    dev_otp = None
+    if level == 1:
         status = "approved"
         msg = "Transfer submitted successfully."
-        
-        # Determine beneficiary name and account
-        b_name = "Unknown Transfer"
-        b_account = None
-        if beneficiary_id is not None:
-            found = next((b for b in _get_beneficiaries(uid) if str(b["id"]) == str(beneficiary_id)), None)
-            if found:
-                b_name = found.get("name", "Unknown Transfer")
-                b_account = found.get("account_number")
-        else:
-            b_name = decrypted_body.get("beneficiary_name") or decrypted_body.get("name") or "Unknown Transfer"
-            b_account = decrypted_body.get("account_number")
-            
-        # Update checking balance
-        user_accounts = _get_accounts(uid)
-        user_accounts["checking"]["balance"] -= amount
-        
-        # Append transaction to ledger
-        user_tx = _get_transactions(uid)
-        new_tx = {
-            "id": len(user_tx) + 1,
-            "date": datetime.datetime.utcnow().isoformat(),
-            "description": f"Transfer to {b_name}",
-            "amount": -amount,
-            "type": "debit"
-        }
-        user_tx.insert(0, new_tx) # Add to the top of the ledger
-
-        # Credit the receiver's account and ledger!
-        if b_account:
-            try:
-                rec_username = _get_or_create_user_by_account(b_account, b_name, db)
-                rec_accounts = _get_accounts(rec_username)
-                rec_accounts["checking"]["balance"] += amount
-                
-                # Append transaction to receiver's ledger
-                rec_tx = _get_transactions(rec_username)
-                new_rec_tx = {
-                    "id": len(rec_tx) + 1,
-                    "date": datetime.datetime.utcnow().isoformat(),
-                    "description": f"Received transfer from {uid}",
-                    "amount": amount,
-                    "type": "credit"
-                }
-                rec_tx.insert(0, new_rec_tx)
-            except Exception as e:
-                print(f"[RECIPIENT CREDIT ERROR] {str(e)}")
-    elif eval_result.escalation_level == 2:
-        status = "challenged"
-        msg = "We need to verify this transfer. A Step-up Verification (OTP) code has been sent to your registered phone."
-    elif eval_result.escalation_level == 3:
-        status = "restricted"
-        msg = "This transfer exceeds your current session cryptographic limits. Transfer restricted."
+        _perform_transfer(uid, amount, beneficiary_id, decrypted_body, db)
+        _PENDING_TRANSFER.pop(uid, None)
     else:
-        status = "blocked"
-        msg = "Security containment activated. Cryptographic session keys revoked. Access terminated."
-        
+        # Park the exact transfer so it can complete after verification.
+        _PENDING_TRANSFER[uid] = {
+            "amount": amount,
+            "beneficiary_id": beneficiary_id,
+            "level": level,
+            "body": {
+                "beneficiary_name": decrypted_body.get("beneficiary_name") or decrypted_body.get("name"),
+                "account_number": decrypted_body.get("account_number"),
+            },
+        }
+        db_user = db.query(User).filter(User.username == uid).first()
+        if level == 2:
+            status = "challenged"
+            msg = "We need to confirm it's really you. Enter the one-time code we sent to your registered email to complete this transfer."
+            if db_user:
+                code = _send_recovery_otp(db_user, db)
+                if os.environ.get("ALLOW_DEFAULT_SECRETS") == "1":
+                    dev_otp = code
+        elif level == 3:
+            status = "restricted"
+            msg = "For your security, please reset your password to continue. Enter the one-time code we emailed you and choose a new password."
+            if db_user:
+                code = _send_recovery_otp(db_user, db)
+                if os.environ.get("ALLOW_DEFAULT_SECRETS") == "1":
+                    dev_otp = code
+        else:
+            status = "blocked"
+            msg = "We've secured your account. To restore access, verify your identity with your one-time code and Recovery Card."
+
     response_data = {
         "status": status,
         "message": msg,
         "key_rotated": key_rotated,
         "new_key": new_key,
         "new_key_version": new_version,
-        "risk_level": eval_result.escalation_level
+        "risk_level": level,
     }
-    
-    return encrypt_response(response_data, cust_session)
+    if dev_otp:
+        response_data["dev_otp"] = dev_otp
+
+    return encrypt_response(response_data, cust_session, request_key)
 
 @app.post("/customer/telemetry")
 def telemetry(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
@@ -834,13 +939,106 @@ def telemetry(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)
     db.commit()
     return {"status": "success", "count": len(events)}
 
+# --- Escalation recovery endpoints --------------------------------------
+
+@app.post("/customer/auth/recovery/send-otp")
+def recovery_send_otp(user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
+    """(Re)send the email verification code for an in-progress L2/L3/L4 challenge."""
+    db_user = db.query(User).filter(User.username == user.get("sub")).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    code = _send_recovery_otp(db_user, db)
+    res = {"status": "success", "message": "We've emailed you a fresh verification code."}
+    if os.environ.get("ALLOW_DEFAULT_SECRETS") == "1":
+        res["dev_otp"] = code
+    return res
+
+@app.post("/customer/auth/challenge-otp")
+def challenge_otp(payload: Dict[str, str] = Body(...), user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
+    """Tier 2 (CHALLENGE): email OTP clears the step-up and completes the parked transfer."""
+    uid = user.get("sub", "")
+    db_user = db.query(User).filter(User.username == uid).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    _check_recovery_otp(db_user, payload.get("otp", "").strip(), db)
+    return _reset_and_resume(_session_from_token(user, db), uid, db)
+
+@app.post("/customer/auth/password-reset")
+def password_reset(payload: Dict[str, str] = Body(...), user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
+    """Tier 3 (RESTRICT): OTP + new password lifts the restriction."""
+    uid = user.get("sub", "")
+    db_user = db.query(User).filter(User.username == uid).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    new_password = payload.get("new_password", "")
+    ok, why = validate_password(new_password)
+    if not ok:
+        raise HTTPException(status_code=400, detail=why)
+    _check_recovery_otp(db_user, payload.get("otp", "").strip(), db)
+    db_user.password_hash = hash_password(new_password)
+    db.commit()
+    return _reset_and_resume(_session_from_token(user, db), uid, db)
+
+@app.post("/customer/auth/card-challenge")
+def card_challenge(user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
+    """Tier 4 (CONTAIN) step 1: email an OTP and issue two Recovery-Card coordinates to read."""
+    from src.api.internal.recovery_card import make_challenge, generate_card
+    uid = user.get("sub", "")
+    db_user = db.query(User).filter(User.username == uid).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if not db_user.recovery_card_data:
+        db_user.recovery_card_data = generate_card()
+        db.commit()
+    positions = make_challenge(2)
+    _CARD_CHALLENGE[uid] = positions
+    code = _send_recovery_otp(db_user, db)
+    res = {"status": "success", "positions": positions,
+           "message": "Enter the one-time code we emailed you and the digits from these Recovery Card cells."}
+    if os.environ.get("ALLOW_DEFAULT_SECRETS") == "1":
+        res["dev_otp"] = code
+    return res
+
+@app.post("/customer/auth/tier4-verify")
+def tier4_verify(payload: Dict[str, Any] = Body(...), user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
+    """Tier 4 (CONTAIN) step 2: OTP + correct card digits + new password restores the account."""
+    uid = user.get("sub", "")
+    db_user = db.query(User).filter(User.username == uid).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    positions = _CARD_CHALLENGE.get(uid)
+    if not positions:
+        raise HTTPException(status_code=400, detail="No active card challenge. Please restart verification.")
+    answers = payload.get("answers", {}) or {}
+    card = db_user.recovery_card_data or {}
+    for pos in positions:
+        given = str(answers.get(pos, "")).strip()
+        if given == "" or given != str(card.get(pos)):
+            raise HTTPException(status_code=400, detail="Recovery Card digits are incorrect. Please check your card and try again.")
+    new_password = payload.get("new_password", "")
+    ok, why = validate_password(new_password)
+    if not ok:
+        raise HTTPException(status_code=400, detail=why)
+    _check_recovery_otp(db_user, str(payload.get("otp", "")).strip(), db)
+    db_user.password_hash = hash_password(new_password)
+    db.commit()
+    return _reset_and_resume(_session_from_token(user, db), uid, db)
+
 @app.get("/customer/auth/recovery-card")
 def get_recovery_card_route(user = Depends(get_current_user_payload), db: Session = Depends(get_db)):
     import base64
     db_user = db.query(User).filter(User.username == user.get("sub")).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
+    # Security: never hand out the card once a session is escalated — otherwise a
+    # locked-out attacker could read the very digits the Tier-4 challenge asks for.
+    sid = user.get("sid")
+    cust_session = db.query(CustomerSession).filter(CustomerSession.session_id == sid).first()
+    if cust_session and cust_session.risk_level > 1:
+        raise HTTPException(status_code=403,
+            detail="For your security, the Recovery Card is unavailable while your account is under verification.")
+
     if not db_user.recovery_card_data:
         from src.api.internal.recovery_card import generate_card
         db_user.recovery_card_data = generate_card()
