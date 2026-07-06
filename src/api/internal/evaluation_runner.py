@@ -101,7 +101,7 @@ def run_evaluation(payload: Dict[str, Any], db: Session) -> EngineResult:
     
     why_desc = result.why_decision
     if result.escalation_level > prev_level:
-        why_desc = f"Risk elevated due to sequence context. {why_desc} Session key rotated (v{prev_version}→v{prev_version + 1})."
+        why_desc = f"{why_desc} Session key rotated (v{prev_version}→v{prev_version + 1})."
     elif result.escalation_level < prev_level:
         why_desc = f"Risk reduced. {why_desc}"
 

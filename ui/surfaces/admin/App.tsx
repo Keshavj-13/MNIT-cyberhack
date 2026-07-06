@@ -581,47 +581,86 @@ export default function App() {
                       );
                     })()}
 
-                    {/* ── 3. AI REASONING + EXPLAINABILITY KEY ─────────── */}
-                    <div className="border-t border-slate-200 pt-4 mt-4 space-y-3">
-                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                        <Brain size={13} className="text-slate-400" /> AI Decision Reasoning
-                        <span className="ml-auto text-xs text-slate-400 font-mono italic normal-case">{selectedEvent.recommendation}</span>
-                      </h3>
-                      <p className="text-sm text-slate-700 leading-relaxed">{selectedEvent.why_decision}</p>
+                    {/* ── 3. AI REASONING + BEHAVIORAL EVIDENCE ───────── */}
+                    <div className="border-t border-slate-200 pt-4 mt-4 space-y-4">
+                      <div>
+                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                          <Brain size={13} className="text-slate-400" /> AI Decision Reasoning
+                          <span className="ml-auto text-xs text-slate-400 font-mono italic normal-case">{selectedEvent.recommendation}</span>
+                        </h3>
+                        <p className="text-sm text-slate-700 leading-relaxed">{selectedEvent.why_decision}</p>
+                      </div>
 
-                      {/* Explainability reference — answers common judge questions */}
-                      <div className="grid grid-cols-3 gap-3 pt-1">
-                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Fusion Score</div>
-                          <div className="text-xs text-slate-600 leading-relaxed">
-                            Weighted ensemble of all 6 ML providers. Each provider contributes according
-                            to its configured weight. Correlation multipliers (LURE→MONETIZE,
-                            EXPLOIT→MONETIZE) are applied before thresholding.
+                      {/* Behavioral Evidence — what AURA actually detected */}
+                      {(() => {
+                        const bd = selectedEvent.breakdown || {};
+                        const active = Object.entries(bd)
+                          .filter(([, d]: [string, any]) => d.risk_score > 0.3)
+                          .sort(([, a]: [string, any], [, b]: [string, any]) => b.risk_score - a.risk_score);
+                        const top = active[0];
+                        const SHORT: Record<string, string> = {
+                          BeaconBehavioralProvider: 'BEACON', AccountTakeoverProvider: 'Account Takeover',
+                          TransactionRiskProvider: 'Transaction', SocialEngineeringRiskProvider: 'Social Engineering',
+                          NetworkRiskProvider: 'Network', DeviceTrustProvider: 'Device Trust',
+                        };
+                        if (active.length === 0) return null;
+                        return (
+                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">What AURA Detected</div>
+                            <div className="space-y-2">
+                              {active.map(([name, d]: [string, any]) => (
+                                <div key={name} className="flex items-start gap-3">
+                                  <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${d.risk_score > 0.7 ? 'bg-red-500' : d.risk_score > 0.4 ? 'bg-amber-500' : 'bg-slate-400'}`}/>
+                                  <div className="min-w-0">
+                                    <span className="text-sm font-semibold text-slate-800">{SHORT[name] || name.replace('Provider','')}</span>
+                                    {(d.explanations || []).filter((e: string) => !e.match(/Model \(|heuristics|Fingerprint/i)).map((e: string, i: number) => (
+                                      <span key={i} className="text-sm text-slate-600"> — {e}</span>
+                                    ))}
+                                    {(d.explanations || []).every((e: string) => e.match(/Model \(|heuristics|Fingerprint/i)) && (
+                                      <span className="text-sm text-slate-500"> — risk score {Math.round(d.risk_score * 100)}%</span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            {top && (
+                              <div className="pt-2 border-t border-slate-200 flex items-center gap-2">
+                                <span className="text-xs text-slate-500">Primary contributor:</span>
+                                <span className="text-xs font-bold text-slate-800">{SHORT[top[0]] || top[0].replace('Provider','')}</span>
+                                <span className="text-xs text-slate-500 ml-auto">Confidence {Math.round((selectedEvent.confidence || 0) * 100)}%</span>
+                              </div>
+                            )}
                           </div>
-                          <div className="mt-1.5 font-mono text-xs text-slate-500">
-                            score = Σ(weight_i × risk_i) × correlation
+                        );
+                      })()}
+
+                      {/* Explainability reference — conceptual, not formulaic */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-white border border-slate-200 rounded-lg p-3">
+                          <div className="text-xs font-bold text-slate-600 mb-1.5">Fusion Score</div>
+                          <div className="text-xs text-slate-500 leading-relaxed">
+                            Combines evidence from all six behavioral models into a single confidence
+                            score. When attack-chain patterns are detected (phishing followed by a
+                            transfer, or device compromise followed by monetization), the score
+                            is amplified to reflect the coordinated nature of the threat.
                           </div>
                         </div>
-                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">BEACON Cosine Similarity</div>
-                          <div className="text-xs text-slate-600 leading-relaxed">
-                            The VarCNN (Singh et al. 2026) extracts a 512-d behavioral embedding from
-                            keystroke inter-event timings. Cosine similarity measures how close the
-                            current embedding is to the enrolled baseline. &lt; 0.97 indicates drift.
-                          </div>
-                          <div className="mt-1.5 font-mono text-xs text-slate-500">
-                            1.0 = identical · 0.0 = completely different
+                        <div className="bg-white border border-slate-200 rounded-lg p-3">
+                          <div className="text-xs font-bold text-slate-600 mb-1.5">BEACON Cosine Similarity</div>
+                          <div className="text-xs text-slate-500 leading-relaxed">
+                            Measures how closely the current session's behavioral embedding matches the
+                            legitimate customer's enrolled profile. A score close to 1.0 indicates the
+                            same person. Drift below 0.97 suggests a different operator — the most
+                            reliable signal of session hijacking after login.
                           </div>
                         </div>
-                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Social Engineering Score</div>
-                          <div className="text-xs text-slate-600 leading-relaxed">
-                            Cumulative moving average — score rises as evidence accumulates across
-                            session events. A phishing URL on step 2 carries forward to step 3,
-                            which is why 66 → 81 across steps is expected and correct.
-                          </div>
-                          <div className="mt-1.5 font-mono text-xs text-slate-500">
-                            S_n = (S_(n-1) × (n-1) + new_score) / n
+                        <div className="bg-white border border-slate-200 rounded-lg p-3">
+                          <div className="text-xs font-bold text-slate-600 mb-1.5">Social Engineering Score</div>
+                          <div className="text-xs text-slate-500 leading-relaxed">
+                            Accumulates evidence of manipulation across session events rather than
+                            scoring each action independently. A phishing URL detected on one step
+                            raises the baseline for subsequent steps, which is why the score
+                            increases from 66 to 81 as correlated signals build up.
                           </div>
                         </div>
                       </div>

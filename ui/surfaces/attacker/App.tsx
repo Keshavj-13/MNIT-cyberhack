@@ -330,11 +330,11 @@ export default function App() {
                     {/* Risk acceleration explanation */}
                     <div className="pt-2 border-t border-slate-100 text-xs text-slate-500 leading-relaxed">
                       <span className="font-semibold text-slate-600">Why risk accelerates: </span>
-                      AURA uses cumulative session priors — each evaluation blends the current
-                      risk score with the session's prior risk level
-                      (L2&nbsp;+0.25, L3&nbsp;+0.50), so confirmed signals compound rather than reset.
-                      Attack-chain correlations (LURE→MONETIZE, EXPLOIT→MONETIZE) apply a ×1.5
-                      multiplier when a transaction follows a social-engineering or device-exploit event.
+                      Isolated suspicious events can be coincidental. Correlated events within the same
+                      authenticated session substantially increase the probability of account takeover —
+                      so AURA carries prior session risk forward rather than evaluating each action
+                      independently. When a social-engineering signal is followed by a transfer attempt,
+                      both signals amplify each other, reflecting the coordinated nature of the attack.
                     </div>
                   </div>
 

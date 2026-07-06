@@ -796,6 +796,16 @@ export default function App() {
             </div>
           </div>
 
+          {/* PQC architecture explanation */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Cryptographic Architecture</div>
+            <div className="space-y-1.5 text-xs text-slate-600">
+              <div className="flex gap-2"><span className="text-teal-600 font-semibold shrink-0">Session layer</span><span>AES-256-CTR AEAD encrypts all API payloads in transit between your browser and the bank.</span></div>
+              <div className="flex gap-2"><span className="text-amber-600 font-semibold shrink-0">Recovery layer</span><span>Your physical Recovery Card is an out-of-band entropy source — it was never stored or transmitted digitally. It plays the role that a post-quantum key derivation scheme would protect: identity confirmation without relying on the compromised session.</span></div>
+              <div className="flex gap-2"><span className="text-emerald-600 font-semibold shrink-0">After recovery</span><span>A completely new AES-256 session is established with a fresh key. The old session is permanently revoked.</span></div>
+            </div>
+          </div>
+
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-700 flex items-center gap-3">
             <CheckCircle size={18} className="shrink-0 text-emerald-600" />
             <span>Your funds are safe. A new session will be established after identity confirmation.</span>
@@ -805,8 +815,8 @@ export default function App() {
             <div className="space-y-4">
               <ol className="text-sm text-slate-600 space-y-2 list-decimal pl-5">
                 <li>We'll email you a one-time verification code.</li>
-                <li>You'll read two digits from your physical Recovery Card — an out-of-band secret the system never transmits.</li>
-                <li>You'll set a new password, and a fresh AES-256 session will be created.</li>
+                <li>You'll read two digits from your physical Recovery Card — an out-of-band secret the system never stores or transmits.</li>
+                <li>You'll set a new password. A fresh AES-256 session is then created and the old session permanently revoked.</li>
               </ol>
               {recoveryError && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{recoveryError}</div>}
               <button onClick={startCardChallenge}
