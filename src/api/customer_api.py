@@ -110,7 +110,26 @@ def encrypt_response(data: Any, cust_session: CustomerSession, key: str = None) 
     }
 
 # Helper to handle key shuffling/rotation when risk level escalates
-def shuffle_session_key(cust_session: CustomerSession, new_risk_level: int, db: Session) -> Tuple[str, int]:
+def _escalation_reason(eval_result, action: str = "action") -> str:
+    """Human-readable rotation reason shown in the admin session monitor."""
+    lvl = eval_result.escalation_level
+    reasons = {2: "Unusual behaviour detected", 3: "Sustained behavioral drift", 4: "Containment threshold exceeded"}
+    base = reasons.get(lvl, "Risk escalation")
+    top = max(eval_result.provider_breakdown.items(), key=lambda kv: kv[1].risk_score, default=(None, None))
+    if top[0]:
+        short = {"BeaconBehavioralProvider": "BEACON", "AccountTakeoverProvider": "ATO",
+                 "TransactionRiskProvider": "Transaction", "SocialEngineeringRiskProvider": "Social",
+                 "NetworkRiskProvider": "Network", "DeviceTrustProvider": "Device"}.get(top[0], top[0])
+        return f"{base} ({short} dominant, {action})"
+    return f"{base} ({action})"
+
+# Per-session key rotation history (in-memory; resets on restart, which is fine — admin only cares about current session)
+_KEY_ROTATION_LOG: Dict[str, list] = {}
+
+def shuffle_session_key(cust_session: CustomerSession, new_risk_level: int, db: Session,
+                        reason: str = "Behavioral escalation") -> Tuple[str, int]:
+    old_key = cust_session.aes_key
+    old_version = cust_session.key_version
     new_key = generate_aes_key()
     cust_session.aes_key = new_key
     cust_session.key_version += 1
@@ -118,6 +137,18 @@ def shuffle_session_key(cust_session: CustomerSession, new_risk_level: int, db: 
     if new_risk_level >= 4:
         cust_session.is_active = False
     db.commit()
+    sid = cust_session.session_id
+    if sid not in _KEY_ROTATION_LOG:
+        _KEY_ROTATION_LOG[sid] = []
+    _KEY_ROTATION_LOG[sid].append({
+        "from_version": old_version,
+        "to_version": cust_session.key_version,
+        "reason": reason,
+        "risk_level": new_risk_level,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "old_key_prefix": old_key[:8] if old_key else None,
+        "new_key_prefix": new_key[:8],
+    })
     return new_key, cust_session.key_version
 
 def maybe_deescalate(cust_session: CustomerSession, eval_result, db: Session):
@@ -654,8 +685,8 @@ def get_beneficiaries(payload: EncryptedPayload = Body(...), user = Depends(get_
         
         maybe_deescalate(cust_session, eval_result, db)
         if eval_result.escalation_level > cust_session.risk_level:
-            # Shuffle keys!
-            new_key, new_version = shuffle_session_key(cust_session, eval_result.escalation_level, db)
+            reason = _escalation_reason(eval_result, "payee registration")
+            new_key, new_version = shuffle_session_key(cust_session, eval_result.escalation_level, db, reason)
             key_rotated = True
             
         status_map = {1: "approved", 2: "challenged", 3: "restricted", 4: "blocked"}
@@ -754,7 +785,19 @@ def _perform_transfer(uid: str, amount: float, beneficiary_id, body: dict, db: S
     return b_name
 
 def _send_recovery_otp(db_user: User, db: Session) -> str:
-    """Issue a fresh security-challenge OTP to the user's email. Returns the code (for dev display)."""
+    """Issue a fresh security-challenge OTP to the user's email. Returns the code (for dev display).
+    Enforces a 60-second cooldown to prevent email flooding."""
+    recent = db.query(OTPVerification).filter(
+        OTPVerification.identifier == db_user.email,
+        OTPVerification.channel == "email",
+        OTPVerification.purpose == "security_challenge",
+        OTPVerification.is_used == False
+    ).order_by(OTPVerification.created_at.desc()).first()
+    if recent:
+        elapsed = (datetime.datetime.utcnow() - recent.created_at).total_seconds()
+        if elapsed < 60:
+            raise HTTPException(status_code=429,
+                detail=f"Please wait {int(60 - elapsed)} seconds before requesting a new code.")
     otp_code = str(secrets.SystemRandom().randint(100000, 999999))
     db.add(OTPVerification(identifier=db_user.email, otp_hash=hash_otp(otp_code),
                            channel="email", purpose="security_challenge", attempts=0, is_used=False))
@@ -840,17 +883,20 @@ def transfer(payload: EncryptedPayload = Body(...), user = Depends(get_current_u
         "action": "transfer"
     }
     eval_result = run_evaluation(eval_payload, db)
-    
+
+    # Allow clean evals to step risk down one level (mirrors beneficiaries endpoint)
+    maybe_deescalate(cust_session, eval_result, db)
+
     # Key rotation check
     key_rotated = False
     new_key = None
     new_version = cust_session.key_version
-    
+
     if eval_result.escalation_level > cust_session.risk_level:
-        # Shuffle keys!
-        new_key, new_version = shuffle_session_key(cust_session, eval_result.escalation_level, db)
+        reason = _escalation_reason(eval_result, "transfer")
+        new_key, new_version = shuffle_session_key(cust_session, eval_result.escalation_level, db, reason)
         key_rotated = True
-        
+
     # Standardised, customer-facing messages — no scores or internal metadata.
     level = eval_result.escalation_level
     dev_otp = None
@@ -889,6 +935,10 @@ def transfer(payload: EncryptedPayload = Body(...), user = Depends(get_current_u
             status = "blocked"
             msg = "We've secured your account. To restore access, verify your identity with your one-time code and Recovery Card."
 
+    # Build rotation info for the customer's key-rotation animation
+    rotation_log = _KEY_ROTATION_LOG.get(cust_session.session_id, [])
+    last_rotation = rotation_log[-1] if rotation_log else None
+
     response_data = {
         "status": status,
         "message": msg,
@@ -896,6 +946,7 @@ def transfer(payload: EncryptedPayload = Body(...), user = Depends(get_current_u
         "new_key": new_key,
         "new_key_version": new_version,
         "risk_level": level,
+        "rotation_reason": last_rotation["reason"] if last_rotation and key_rotated else None,
     }
     if dev_otp:
         response_data["dev_otp"] = dev_otp
