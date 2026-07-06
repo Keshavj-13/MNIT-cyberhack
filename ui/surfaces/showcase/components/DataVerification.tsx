@@ -230,7 +230,7 @@ export default function DataVerification() {
                       onClick={() => setMainTab(tab.key as any)}
                       className={`flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
                         mainTab === tab.key
-                          ? 'bg-neutral-800 text-teal-400 shadow-lg border border-slate-200'
+                          ? 'bg-slate-900 text-teal-300 shadow-lg border border-slate-900'
                           : 'text-slate-500 hover:text-slate-700'
                       }`}
                     >
@@ -509,7 +509,7 @@ export default function DataVerification() {
                             onClick={() => setActivePlotTab(subtab.key as any)}
                             className={`flex-1 flex items-center justify-center gap-2 py-3 text-center rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
                               activePlotTab === subtab.key
-                                ? 'bg-neutral-800 text-teal-400 shadow-md border border-slate-200'
+                                ? 'bg-slate-900 text-teal-300 shadow-md border border-slate-900'
                                 : 'text-slate-500 hover:text-slate-700'
                             }`}
                           >
@@ -675,7 +675,7 @@ export default function DataVerification() {
                       </h4>
                       <span className="text-[10px] text-neutral-600 font-mono">Sample: n=3</span>
                     </div>
-                    <div className="border border-slate-200 rounded-2xl overflow-hidden bg-black/20">
+                    <div className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50">
                       <div className="overflow-x-auto custom-scrollbar">
                         <table className="w-full text-left border-collapse text-[11px]">
                           <thead>
