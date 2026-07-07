@@ -840,6 +840,26 @@ def _reset_and_resume(cust_session: CustomerSession, uid: str, db: Session) -> d
     if pend:
         name = _perform_transfer(uid, pend["amount"], pend.get("beneficiary_id"), pend.get("body", {}), db)
         completed = {"amount": pend["amount"], "beneficiary_name": name}
+
+    # Create a recovery SecurityEvent so the admin Session Monitor immediately shows
+    # risk=0 / L1 ALLOW rather than the last high-risk event from before verification.
+    from src.db.models import SecurityEvent
+    recovery_event = SecurityEvent(
+        user_id=uid,
+        session_id=cust_session.session_id,
+        event_category="NEUTRAL",
+        input_payload={"action": "identity_verified"},
+        overall_risk=0.0,
+        decision="ALLOW",
+        escalation_level=1,
+        confidence=1.0,
+        breakdown={},
+        recommendation="Session restored. All banking features available.",
+        why_decision="Identity confirmed. Session key rotated. Risk cleared to L1.",
+    )
+    db.add(recovery_event)
+    db.commit()
+
     return {
         "status": "success",
         "risk_level": 1,

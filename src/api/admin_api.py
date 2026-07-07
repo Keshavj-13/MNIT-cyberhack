@@ -89,8 +89,8 @@ def list_events(limit: int = 50, user_id: Optional[str] = None, db: Session = De
     if user_id:
         query = query.filter(SecurityEvent.user_id == user_id)
         
-    # sort by risk first so highest-risk events are always visible without scrolling
-    events = query.order_by(SecurityEvent.overall_risk.desc(), SecurityEvent.timestamp.desc()).limit(limit).all()
+    # sort by time so the most recent event (including recovery events) is always first
+    events = query.order_by(SecurityEvent.timestamp.desc(), SecurityEvent.id.desc()).limit(limit).all()
     return [{
         "id": e.id,
         "user_id": e.user_id,
