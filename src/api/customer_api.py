@@ -834,6 +834,12 @@ def _reset_and_resume(cust_session: CustomerSession, uid: str, db: Session) -> d
     cust_session.risk_level = 1
     cust_session.is_active = True
     db.commit()
+    
+    # Wipe telemetry from before the recovery so old robotic behavior doesn't taint the baseline
+    from src.db.models import TelemetryData
+    db.query(TelemetryData).filter(TelemetryData.session_id == cust_session.session_id).delete()
+    db.commit()
+    
     _CARD_CHALLENGE.pop(uid, None)
     completed = None
     pend = _PENDING_TRANSFER.pop(uid, None)
