@@ -1008,12 +1008,15 @@ export default function App() {
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Stats bar */}
               <div className="grid grid-cols-4 border-b border-slate-200 shrink-0">
-                {[
-                  { label: 'Active Sessions',     value: sessions.filter(s=>s.is_active).length,                     color: 'text-slate-900' },
-                  { label: 'Currently Escalated', value: sessions.filter(s=>s.is_active&&s.risk_level>1).length,    color: 'text-amber-700' },
-                  { label: 'Total Key Rotations', value: sessions.reduce((a,s)=>a+(s.key_version-1),0),            color: 'text-slate-900' },
-                  { label: 'Contained / Revoked', value: sessions.filter(s=>s.risk_level>=4||!s.is_active).length, color: 'text-red-700'   },
-                ].map((stat, i) => (
+                {(() => {
+                  const real = sessions.filter((s:any) => !s.user_id.startsWith('sim_'));
+                  return [
+                    { label: 'Active Sessions',     value: real.filter((s:any)=>s.is_active).length,                  color: 'text-slate-900' },
+                    { label: 'Currently Escalated', value: real.filter((s:any)=>s.is_active&&s.risk_level>1).length,  color: 'text-amber-700' },
+                    { label: 'Total Key Rotations', value: real.reduce((a:number,s:any)=>a+(s.key_version-1),0),      color: 'text-slate-900' },
+                    { label: 'Contained / Revoked', value: real.filter((s:any)=>s.risk_level>=4||!s.is_active).length,color: 'text-red-700'   },
+                  ];
+                })().map((stat, i) => (
                   <div key={stat.label} className={`px-8 py-5 ${i<3?'border-r border-slate-200':''}`}>
                     <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-1">{stat.label}</p>
                     <p className={`text-5xl font-bold leading-none ${stat.color}`}>{stat.value}</p>
@@ -1037,7 +1040,10 @@ export default function App() {
                   <div className="overflow-y-auto flex-1">
                     {sessions.length === 0 ? (
                       <div className="py-16 text-center text-slate-400 text-base px-4">No sessions yet. Log in to the Customer Portal.</div>
-                    ) : (
+                    ) : (() => {
+                      const realSessions = sessions.filter((s:any) => !s.user_id.startsWith('sim_'));
+                      const simSessions  = sessions.filter((s:any) =>  s.user_id.startsWith('sim_'));
+                      return (
                       <table className="w-full text-left">
                         {!liveSessionId && (
                           <thead>
@@ -1050,7 +1056,7 @@ export default function App() {
                           </thead>
                         )}
                         <tbody className="divide-y divide-slate-100">
-                          {sessions.map(s => {
+                          {realSessions.map(s => {
                             const isSelected = liveSessionId === s.session_id;
                             const isFlashing = s.session_id === flashingSessionId;
                             const rl = Math.min(4, Math.max(1, s.risk_level));
@@ -1101,9 +1107,40 @@ export default function App() {
                               </tr>
                             );
                           })}
+                          {/* sim_* sessions — collapsed at the bottom, dimmed */}
+                          {simSessions.length > 0 && (
+                            <tr><td colSpan={4} className="px-4 pt-4 pb-1">
+                              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Simulator sessions ({simSessions.length})</span>
+                            </td></tr>
+                          )}
+                          {simSessions.map(s => {
+                            const isSelected = liveSessionId === s.session_id;
+                            const rl = Math.min(4, Math.max(1, s.risk_level));
+                            const compact = !!liveSessionId;
+                            return (
+                              <tr key={s.session_id}
+                                onClick={() => setLiveSessionId(isSelected ? null : s.session_id)}
+                                className={`cursor-pointer transition-colors opacity-50 hover:opacity-80 border-l-2 ${isSelected ? 'bg-slate-900 opacity-100 border-slate-700' : 'border-transparent hover:bg-slate-50'}`}>
+                                {compact ? (
+                                  <td className="px-4 py-2 w-full">
+                                    <div className={`text-xs font-mono truncate ${isSelected?'text-white':'text-slate-500'}`}>{s.user_id}</div>
+                                    <span className={`text-xs font-bold px-1 py-0.5 rounded ${rl>=4?'bg-red-100 text-red-700':rl>=2?'bg-amber-100 text-amber-700':'bg-slate-100 text-slate-400'}`}>L{rl}</span>
+                                  </td>
+                                ) : (
+                                  <>
+                                    <td className="px-6 py-3 text-sm font-mono text-slate-500">{s.user_id}</td>
+                                    <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs font-bold border ${riskBadge[rl]}`}>L{rl}</span></td>
+                                    <td className="px-4 py-3 font-mono text-sm text-slate-400">v{s.key_version}</td>
+                                    <td className="px-4 py-3 text-xs text-slate-400">{s.is_active ? 'active' : 'locked'}</td>
+                                  </>
+                                )}
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
-                    )}
+                      );
+                    })()}
                   </div>
                 </div>
 

@@ -298,6 +298,16 @@ def run_live_scenario(name: str, target_user: str = "keshav", db: Session = Depe
         )
     session_id = cust_session.session_id
 
+    # Reset to L1 before each live run so prior risk from previous attacks doesn't compound.
+    # Without this, a session that was previously contained at L4 would immediately re-contain
+    # on step 1 of the next scenario because the prior risk injection (L4 → +0.75) alone
+    # exceeds the containment threshold.
+    from src.api.customer_api import generate_aes_key
+    cust_session.risk_level = 1
+    cust_session.is_active = True
+    # Don't rotate the key — the customer's browser still holds the current key
+    db.commit()
+
     steps = []
     for step_idx, step in enumerate(DEMO_SCENARIOS[name]):
         payload = {**step["payload"], "user_id": LIVE_USER, "session_id": session_id}

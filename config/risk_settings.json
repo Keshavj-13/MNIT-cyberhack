@@ -2,14 +2,12 @@
   "threshold_challenge": 0.2,
   "threshold_restrict": 0.4,
   "threshold_contain": 0.7,
-  "max_transfer_limit": 5000,
-  "trust_recovery_speed": 1.0,
   "weights": {
-    "TransactionRiskProvider": 0.4,
-    "SocialEngineeringRiskProvider": 0.2,
-    "PhishingRiskProvider": 0.15,
-    "AccountTakeoverProvider": 0.15,
-    "DeviceTrustProvider": 0.1,
-    "BeaconBehavioralProvider": 0.05
+    "TransactionRiskProvider": 0.40,
+    "SocialEngineeringRiskProvider": 0.20,
+    "AccountTakeoverProvider": 0.05,
+    "NetworkRiskProvider": 0.05,
+    "DeviceTrustProvider": 0.10,
+    "BeaconBehavioralProvider": 0.20
   }
 }
