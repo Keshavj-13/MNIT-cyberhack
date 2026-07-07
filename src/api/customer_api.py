@@ -853,7 +853,14 @@ def _reset_and_resume(cust_session: CustomerSession, uid: str, db: Session) -> d
         decision="ALLOW",
         escalation_level=1,
         confidence=1.0,
-        breakdown={},
+        breakdown={
+            "TransactionRiskProvider": {"risk_score": 0.10, "confidence": 0.9, "event_category": "NEUTRAL", "reason": "Baseline"},
+            "SocialEngineeringRiskProvider": {"risk_score": 0.0, "confidence": 0.9, "event_category": "NEUTRAL", "reason": "Baseline"},
+            "AccountTakeoverProvider": {"risk_score": 0.05, "confidence": 0.9, "event_category": "NEUTRAL", "reason": "Baseline"},
+            "NetworkRiskProvider": {"risk_score": 0.05, "confidence": 0.9, "event_category": "NEUTRAL", "reason": "Baseline"},
+            "DeviceTrustProvider": {"risk_score": 0.05, "confidence": 0.9, "event_category": "NEUTRAL", "reason": "Baseline"},
+            "BeaconBehavioralProvider": {"risk_score": 0.05, "confidence": 0.9, "event_category": "NEUTRAL", "reason": "Baseline"}
+        },
         recommendation="Session restored. All banking features available.",
         why_decision="Identity confirmed. Session key rotated. Risk cleared to L1.",
     )

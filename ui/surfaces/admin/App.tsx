@@ -1331,31 +1331,27 @@ export default function App() {
                             )}
 
                             {/* Provider bars */}
-                            {liveData.latest_event && (() => {
-                              const sessionRl = liveData.session?.risk_level ?? 1;
-                              const recovered = sessionRl === 1 && liveData.latest_event?.escalation_level > 1;
-                              return (
-                                <div className="space-y-3">
-                                  {Object.entries(liveData.latest_event.breakdown || {}).map(([name, res]: [string, any]) => {
-                                    const short = PROVIDER_META[name]?.short || name.replace('Provider','').replace('Risk','');
-                                    const pct = recovered ? 0 : Math.round((res.risk_score||0)*100);
-                                    const bar = pct>=60?'bg-red-500':pct>=30?'bg-amber-400':'bg-emerald-500';
-                                    const sc  = pct>=60?'text-red-700':pct>=30?'text-amber-700':'text-emerald-700';
-                                    return (
-                                      <div key={name} className={recovered ? "opacity-40" : ""}>
-                                        <div className="flex justify-between items-baseline mb-1">
-                                          <span className="text-base font-semibold text-slate-700">{short}</span>
-                                          <span className={`text-base font-bold font-mono ${sc}`}>{pct}%</span>
-                                        </div>
-                                        <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
-                                          <div className={`h-full rounded-full transition-all duration-500 ${bar}`} style={{width:`${pct}%`}}/>
-                                        </div>
+                            {liveData.latest_event && (
+                              <div className="space-y-3">
+                                {Object.entries(liveData.latest_event.breakdown || {}).map(([name, res]: [string, any]) => {
+                                  const short = PROVIDER_META[name]?.short || name.replace('Provider','').replace('Risk','');
+                                  const pct = Math.round((res.risk_score||0)*100);
+                                  const bar = pct>=60?'bg-red-500':pct>=30?'bg-amber-400':'bg-emerald-500';
+                                  const sc  = pct>=60?'text-red-700':pct>=30?'text-amber-700':'text-emerald-700';
+                                  return (
+                                    <div key={name}>
+                                      <div className="flex justify-between items-baseline mb-1">
+                                        <span className="text-base font-semibold text-slate-700">{short}</span>
+                                        <span className={`text-base font-bold font-mono ${sc}`}>{pct}%</span>
                                       </div>
-                                    );
-                                  })}
-                                </div>
-                              );
-                            })()}
+                                      <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                                        <div className={`h-full rounded-full transition-all duration-500 ${bar}`} style={{width:`${pct}%`}}/>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
 
                             {/* ARIA hidden for showcase */}
                           </div>
