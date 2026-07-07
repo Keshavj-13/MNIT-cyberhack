@@ -1273,21 +1273,25 @@ export default function App() {
                             <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">Model Assessment</p>
                           </div>
                           <div className="flex-1 overflow-y-auto p-5 space-y-5">
-                            {/* Big risk number */}
-                            {liveData.latest_event ? (() => {
-                              const risk = liveData.latest_event.overall_risk;
-                              const pct = Math.round(risk*100);
-                              const c = risk>=0.7?'text-red-700':risk>=0.4?'text-orange-700':risk>=0.2?'text-amber-700':'text-emerald-700';
+                            {/* Big risk number — driven by live session risk_level, not stale last event */}
+                            {(() => {
+                              // Session risk_level is the ground truth (persisted in DB, updated on every
+                              // escalation and reset to 1 on recovery). The latest_event.overall_risk is
+                              // historical — a recovered session must show 0, not the last attack score.
+                              const sessionRl = liveData.session?.risk_level ?? 1;
+                              const recovered = sessionRl === 1 && liveData.latest_event?.escalation_level > 1;
+                              const pct = recovered ? 0 : liveData.latest_event ? Math.round(liveData.latest_event.overall_risk*100) : null;
+                              const c = sessionRl>=4?'text-red-700':sessionRl>=3?'text-orange-700':sessionRl>=2?'text-amber-700':'text-emerald-700';
+                              if (pct === null) return <p className="text-base text-slate-400 italic mt-4">No model evaluation yet for this session.</p>;
                               return (
                                 <div className="text-center pb-5 border-b border-slate-100">
                                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Current Risk</p>
                                   <div className={`text-8xl font-bold font-mono leading-none ${c}`}>{pct}</div>
                                   <div className="text-sm text-slate-400 mt-1">/ 100</div>
+                                  {recovered && <div className="text-sm font-semibold text-emerald-600 mt-1">Session recovered — identity confirmed</div>}
                                 </div>
                               );
-                            })() : (
-                              <p className="text-base text-slate-400 italic mt-4">No model evaluation yet for this session.</p>
-                            )}
+                            })()}
 
                             {/* Cryptographic session details */}
                             {liveData.session && (
@@ -1327,27 +1331,31 @@ export default function App() {
                             )}
 
                             {/* Provider bars */}
-                            {liveData.latest_event && (
-                              <div className="space-y-3">
-                                {Object.entries(liveData.latest_event.breakdown || {}).map(([name, res]: [string, any]) => {
-                                  const short = PROVIDER_META[name]?.short || name.replace('Provider','').replace('Risk','');
-                                  const pct = Math.round((res.risk_score||0)*100);
-                                  const bar = pct>=60?'bg-red-500':pct>=30?'bg-amber-400':'bg-emerald-500';
-                                  const sc  = pct>=60?'text-red-700':pct>=30?'text-amber-700':'text-emerald-700';
-                                  return (
-                                    <div key={name}>
-                                      <div className="flex justify-between items-baseline mb-1">
-                                        <span className="text-base font-semibold text-slate-700">{short}</span>
-                                        <span className={`text-base font-bold font-mono ${sc}`}>{pct}%</span>
+                            {liveData.latest_event && (() => {
+                              const sessionRl = liveData.session?.risk_level ?? 1;
+                              const recovered = sessionRl === 1 && liveData.latest_event?.escalation_level > 1;
+                              return (
+                                <div className="space-y-3">
+                                  {Object.entries(liveData.latest_event.breakdown || {}).map(([name, res]: [string, any]) => {
+                                    const short = PROVIDER_META[name]?.short || name.replace('Provider','').replace('Risk','');
+                                    const pct = recovered ? 0 : Math.round((res.risk_score||0)*100);
+                                    const bar = pct>=60?'bg-red-500':pct>=30?'bg-amber-400':'bg-emerald-500';
+                                    const sc  = pct>=60?'text-red-700':pct>=30?'text-amber-700':'text-emerald-700';
+                                    return (
+                                      <div key={name} className={recovered ? "opacity-40" : ""}>
+                                        <div className="flex justify-between items-baseline mb-1">
+                                          <span className="text-base font-semibold text-slate-700">{short}</span>
+                                          <span className={`text-base font-bold font-mono ${sc}`}>{pct}%</span>
+                                        </div>
+                                        <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                                          <div className={`h-full rounded-full transition-all duration-500 ${bar}`} style={{width:`${pct}%`}}/>
+                                        </div>
                                       </div>
-                                      <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
-                                        <div className={`h-full rounded-full transition-all duration-500 ${bar}`} style={{width:`${pct}%`}}/>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()}
 
                             {/* ARIA hidden for showcase */}
                           </div>
