@@ -303,49 +303,42 @@ export default function App() {
                   </div>
 
                   {/* Risk escalation bar */}
-                  <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+                  <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-                        <TrendingUp size={11}/> Risk Escalation Across Steps
+                      <span className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                        <TrendingUp size={13}/> Risk Escalation Across Steps
                       </span>
-                      <span className="text-xs font-mono text-slate-600">peak {(maxRisk * 100).toFixed(0)}/100</span>
+                      <span className="text-base font-bold font-mono text-slate-700">peak {(maxRisk * 100).toFixed(0)}/100</span>
                     </div>
-                    <div className="flex items-end gap-1.5 h-16">
+                    <div className="flex items-end gap-2 h-20">
                       {result.steps.map((s, i) => {
                         const h = Math.max(8, s.result.overall_risk * 100);
                         const color = s.result.overall_risk > 0.7 ? 'bg-red-500' : s.result.overall_risk > 0.4 ? 'bg-orange-400' : s.result.overall_risk > 0.2 ? 'bg-amber-400' : 'bg-emerald-400';
                         return (
-                          <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                            <span className="text-sm font-mono text-slate-500">{(s.result.overall_risk * 100).toFixed(0)}</span>
-                            <div className={`w-full rounded-t-sm transition-all duration-700 ${color} ${i <= animStep ? 'opacity-100' : 'opacity-10'}`} style={{ height: `${h}%` }}/>
+                          <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
+                            <span className="text-base font-bold font-mono text-slate-600">{(s.result.overall_risk * 100).toFixed(0)}</span>
+                            <div className={`w-full rounded-t transition-all duration-700 ${color} ${i <= animStep ? 'opacity-100' : 'opacity-10'}`} style={{ height: `${h}%` }}/>
                           </div>
                         );
                       })}
                     </div>
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-2">
                       {result.steps.map((_, i) => (
-                        <div key={i} className="flex-1 text-center text-sm text-slate-600 font-mono">S{i+1}</div>
+                        <div key={i} className="flex-1 text-center text-sm font-bold text-slate-500 font-mono">S{i+1}</div>
                       ))}
                     </div>
-                    {/* Risk acceleration explanation */}
-                    <div className="pt-2 border-t border-slate-100 text-xs text-slate-500 leading-relaxed">
-                      <span className="font-semibold text-slate-600">Why risk accelerates: </span>
-                      Isolated suspicious events can be coincidental. Correlated events within the same
-                      authenticated session substantially increase the probability of account takeover —
-                      so AURA carries prior session risk forward rather than evaluating each action
-                      independently. When a social-engineering signal is followed by a transfer attempt,
-                      both signals amplify each other, reflecting the coordinated nature of the attack.
-                    </div>
+                    <p className="text-sm text-slate-500 pt-1 border-t border-slate-100">
+                      <span className="font-semibold text-slate-600">Cumulative risk — </span>
+                      correlated signals within the same session amplify each other rather than resetting between steps.
+                    </p>
                   </div>
 
                   {/* Step-by-step kill chain */}
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {result.steps.map((step, i) => {
                       const lvl = LEVEL_META[Math.min(step.result.escalation_level - 1, 3)];
                       const LvlIcon = lvl.Icon;
                       const visible = i <= animStep;
-                      // Only surface a phase label when risk is genuinely elevated — avoids showing
-                      // misleading EXPLOIT badges on low-risk steps where a single provider misfires.
                       const cat = step.result.overall_risk > 0.25 && step.result.provider_breakdown
                         ? Object.values(step.result.provider_breakdown).find((p: any) => p.event_category !== 'NEUTRAL' && p.risk_score > 0.5)
                         : null;
@@ -356,22 +349,21 @@ export default function App() {
                           <div className="flex gap-3">
                             {/* Step indicator */}
                             <div className="flex flex-col items-center">
-                              <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center text-sm font-bold font-mono shrink-0 ${
-                                visible ? `${lvl.bg} border-current` : 'border-slate-700 text-slate-700'
+                              <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-base font-bold font-mono shrink-0 ${
+                                visible ? `${lvl.bg} border-current` : 'border-slate-300 text-slate-400'
                               } ${lvl.color}`}>
                                 {i + 1}
                               </div>
                               {i < result.steps.length - 1 && (
-                                <div className={`w-0.5 flex-1 mt-1 min-h-[1.5rem] ${visible ? 'bg-white/[0.08]' : 'bg-white/[0.02]'}`}/>
+                                <div className={`w-0.5 flex-1 mt-1 min-h-[1.5rem] bg-slate-200`}/>
                               )}
                             </div>
 
                             {/* Card */}
-                            <div className={`flex-1 mb-2 bg-white border rounded-xl p-4 space-y-3 ${visible ? 'border-slate-200' : 'border-slate-200'}`}>
+                            <div className="flex-1 mb-2 bg-white border border-slate-200 rounded-xl p-4 space-y-3">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1">
-                                  <p className="text-xs font-semibold text-slate-900 leading-snug">{step.label}</p>
-                                  <p className="text-sm text-slate-500 mt-0.5 italic">"{step.result.why_decision}"</p>
+                                  <p className="text-sm font-semibold text-slate-900 leading-snug">{step.label}</p>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   {phase !== 'NEUTRAL' && (
@@ -405,9 +397,9 @@ export default function App() {
                                       const pct = Math.round(d.risk_score * 100);
                                       const high = d.risk_score > 0.5;
                                       return (
-                                        <div key={name} className={`rounded-lg px-2 py-1.5 ${high ? 'bg-red-50 border border-red-200' : 'bg-slate-50'}`}>
-                                          <p className="text-xs text-slate-500 truncate font-semibold">{SHORT[name] || name.replace('Provider','').replace('Risk','')}</p>
-                                          <p className={`text-sm font-mono font-bold ${pct >= 70 ? 'text-red-600' : pct >= 40 ? 'text-amber-600' : 'text-slate-500'}`}>
+                                        <div key={name} className={`rounded-lg px-2.5 py-2 ${high ? 'bg-red-50 border border-red-200' : 'bg-slate-50'}`}>
+                                          <p className="text-sm text-slate-600 truncate font-semibold">{SHORT[name] || name.replace('Provider','').replace('Risk','')}</p>
+                                          <p className={`text-base font-mono font-bold ${pct >= 70 ? 'text-red-600' : pct >= 40 ? 'text-amber-600' : 'text-slate-500'}`}>
                                             {pct}%
                                           </p>
                                         </div>
@@ -425,30 +417,30 @@ export default function App() {
 
                   {/* Final verdict */}
                   {animStep >= result.steps.length - 1 && finalStep && (
-                    <div className={`rounded-2xl p-5 border ${isNormalCustomer ? 'bg-emerald-500/5 border-emerald-500/20' : breached ? 'bg-red-500/5 border-red-500/20' : 'bg-teal-500/5 border-teal-500/20'}`}>
-                      <div className="flex items-center gap-3 mb-3">
+                    <div className={`rounded-2xl p-6 border ${isNormalCustomer ? 'bg-emerald-50 border-emerald-200' : breached ? 'bg-red-50 border-red-200' : 'bg-teal-50 border-teal-200'}`}>
+                      <div className="flex items-center gap-3 mb-4">
                         {isNormalCustomer
-                          ? <CheckCircle2 size={20} className="text-emerald-500"/>
-                          : breached ? <Unlock size={20} className="text-red-400"/> : <Lock size={20} className="text-teal-400"/>}
+                          ? <CheckCircle2 size={22} className="text-emerald-600"/>
+                          : breached ? <Unlock size={22} className="text-red-600"/> : <Lock size={22} className="text-teal-700"/>}
                         <div>
-                          <p className={`text-sm font-bold ${isNormalCustomer ? 'text-emerald-600' : breached ? 'text-red-300' : 'text-teal-300'}`}>
+                          <p className={`text-base font-bold ${isNormalCustomer ? 'text-emerald-700' : breached ? 'text-red-700' : 'text-teal-800'}`}>
                             {isNormalCustomer ? 'Normal Session — No Threat Detected' : breached ? 'Attack Partially Succeeded' : 'Attack Successfully Contained'}
                           </p>
-                          <p className="text-sm text-slate-500 mt-0.5">{finalStep.result.recommendation}</p>
+                          <p className="text-sm text-slate-600 mt-0.5">{finalStep.result.recommendation}</p>
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-3 font-mono text-center">
-                        <div className="bg-slate-50/50 rounded-lg p-2">
-                          <p className="text-xs text-slate-500 uppercase">Peak Risk</p>
-                          <p className="text-lg font-bold text-slate-900">{(maxRisk * 100).toFixed(0)}</p>
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div className="bg-white rounded-xl p-3 border border-slate-200">
+                          <p className="text-sm font-semibold text-slate-500 uppercase">Peak Risk</p>
+                          <p className="text-3xl font-bold text-slate-900 font-mono">{(maxRisk * 100).toFixed(0)}</p>
                         </div>
-                        <div className="bg-slate-50/50 rounded-lg p-2">
-                          <p className="text-xs text-slate-500 uppercase">Final Decision</p>
-                          <p className={`text-sm font-bold ${breached ? 'text-red-400' : 'text-teal-400'}`}>{finalStep.result.decision}</p>
+                        <div className="bg-white rounded-xl p-3 border border-slate-200">
+                          <p className="text-sm font-semibold text-slate-500 uppercase">Decision</p>
+                          <p className={`text-xl font-bold font-mono ${isNormalCustomer ? 'text-emerald-700' : breached ? 'text-red-600' : 'text-teal-700'}`}>{finalStep.result.decision}</p>
                         </div>
-                        <div className="bg-slate-50/50 rounded-lg p-2">
-                          <p className="text-xs text-slate-500 uppercase">Escalation</p>
-                          <p className={`text-lg font-bold ${LEVEL_META[Math.min(finalStep.result.escalation_level-1,3)].color}`}>
+                        <div className="bg-white rounded-xl p-3 border border-slate-200">
+                          <p className="text-sm font-semibold text-slate-500 uppercase">Tier</p>
+                          <p className={`text-3xl font-bold font-mono ${LEVEL_META[Math.min(finalStep.result.escalation_level-1,3)].color}`}>
                             L{finalStep.result.escalation_level}
                           </p>
                         </div>
