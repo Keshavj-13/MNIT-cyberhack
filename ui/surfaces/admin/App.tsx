@@ -400,9 +400,8 @@ export default function App() {
         <aside className="w-56 border-r border-slate-200 bg-white flex flex-col shrink-0 p-3 space-y-1">
           {([
             ['incident', t('tab_incident'),  Activity],
-            ['aria',     t('tab_aria'),      Bot],
             ['sessions', t('tab_sessions'),  Database],
-            ['settings', t('tab_settings'),  Sliders],
+            // aria and settings hidden for showcase — code intact, tabs not exposed
           ] as [string, string, any][]).map(([tab, label, Icon]) => {
             const isTabActive = activeTab === tab;
             const activeBg = tab === 'aria' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-800';
@@ -820,28 +819,7 @@ export default function App() {
                           })()}
                         </div>
 
-                        {/* ARIA */}
-                        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 shadow-sm">
-                          <div className="flex items-center gap-2">
-                            <Bot size={13} className="text-blue-600" />
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest">ARIA Autonomous Agent</span>
-                          </div>
-                          {relatedAria.length > 0 ? (
-                            <>
-                              <div className="text-sm font-bold text-slate-800">{relatedAria[0].hypothesis}</div>
-                              <div className="text-sm text-slate-500">Investigation #{relatedAria[0].id} · {relatedAria[0].event_count} events · {Math.round(relatedAria[0].confidence*100)}% confidence</div>
-                              <button onClick={() => setActiveTab('aria')}
-                                className="text-xs text-blue-600 hover:text-blue-700 font-bold uppercase tracking-wider flex items-center gap-1">
-                                View Investigation <ArrowRight size={10} />
-                              </button>
-                            </>
-                          ) : (
-                            <div className="text-sm text-slate-400">
-                              No autonomous investigation triggered yet.
-                              <br /><span className="text-xs">ARIA needs ≥3 events at risk ≥0.3 within 10 min.</span>
-                            </div>
-                          )}
-                        </div>
+                        {/* ARIA — hidden for showcase */}
                       </div>
                     </div>
 
@@ -1334,18 +1312,7 @@ export default function App() {
                               </div>
                             )}
 
-                            {/* ARIA */}
-                            {ariaForSession && (
-                              <div className="border-t border-slate-200 pt-4">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Bot size={15} className="text-blue-600 shrink-0"/>
-                                  <span className="text-sm font-bold text-blue-700 uppercase tracking-wider">ARIA</span>
-                                  <span className="text-xs text-slate-400 font-mono ml-auto">{Math.round(ariaForSession.confidence*100)}% conf</span>
-                                </div>
-                                <p className="text-sm font-semibold text-slate-700 mb-1">{ariaForSession.hypothesis}</p>
-                                <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{ariaForSession.vlm_assessment}</p>
-                              </div>
-                            )}
+                            {/* ARIA hidden for showcase */}
                           </div>
                         </div>
 
