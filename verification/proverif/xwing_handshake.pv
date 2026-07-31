@@ -1,0 +1,82 @@
+(*
+  X-Wing hybrid KEM handshake — symbolic verification (ProVerif).
+
+  Models the key establishment used at L4 escalation: a hybrid of ML-KEM-768
+  (post-quantum KEM to the server's long-term KEM key) and X25519 (classical DH
+  against the server's long-term X25519 key), bound by the X-Wing combiner
+  H(ss_mlkem, ss_x25519, ct_x, pk_x). The server sends a confirmation tag under
+  the derived key, giving the client evidence the server participated.
+
+  Proves, against a Dolev-Yao attacker with unbounded sessions:
+    (1) SECRECY of the session key established by an honest client.
+    (2) AUTHENTICATION: the client only confirms a key the server established
+        (injective agreement) — no confirmation can be forged/replayed.
+
+  The post-quantum (hybrid-resilience) argument is in xwing_hybrid_*.pv.
+
+  Run:  proverif verification/proverif/xwing_handshake.pv
+  Expect: every RESULT "is true".
+*)
+
+free net: channel.
+
+type skey.  type pkey.
+type ctkem.
+type G.                                   (* X25519 group element *)
+
+(* ---- ML-KEM as a generic KEM: keygen / encaps / decaps ---- *)
+fun kpk(skey): pkey.
+fun encct(pkey, bitstring): ctkem.        (* ciphertext from (pk, coins)  *)
+fun encss(pkey, bitstring): bitstring.    (* shared secret from (pk, coins) *)
+reduc forall s: skey, r: bitstring;
+      decss(s, encct(kpk(s), r)) = encss(kpk(s), r).
+
+(* ---- X25519 as Diffie-Hellman ---- *)
+const g: G [data].
+fun exp(G, bitstring): G.
+equation forall x: bitstring, y: bitstring; exp(exp(g,x),y) = exp(exp(g,y),x).
+
+(* ---- X-Wing combiner + AEAD to expose the derived key's usability ---- *)
+fun combine(bitstring, G, G, G): bitstring.    (* ss_m, ss_x, ct_x(=pk_e), pk_x *)
+fun senc(bitstring, bitstring): bitstring.
+reduc forall m: bitstring, k: bitstring; sdec(senc(m,k), k) = m.
+
+free probe: bitstring [private].          (* secrecy witness sealed under the key *)
+const sconf: bitstring.                   (* public server-confirmation tag *)
+
+event serverEstablished(bitstring).
+event clientConfirmed(bitstring).
+
+query attacker(probe).
+query k: bitstring; inj-event(clientConfirmed(k)) ==> inj-event(serverEstablished(k)).
+
+(* Server: long-term ML-KEM key sk_m and long-term X25519 scalar x_s *)
+let server(sk_m: skey, x_s: bitstring) =
+    in(net, (ct_m: ctkem, pk_e: G));
+    let ss_m = decss(sk_m, ct_m) in
+    let ss_x = exp(pk_e, x_s) in
+    let k = combine(ss_m, ss_x, pk_e, exp(g, x_s)) in
+    event serverEstablished(k);
+    out(net, senc(sconf, k)).              (* confirm participation under the key *)
+
+(* Client: knows server public keys pk_m and pk_x = g^x_s *)
+let client(pk_m: pkey, pk_x: G) =
+    new r_m: bitstring;                    (* ML-KEM encaps coins *)
+    new x_e: bitstring;                    (* ephemeral X25519 scalar *)
+    let ct_m = encct(pk_m, r_m) in
+    let ss_m = encss(pk_m, r_m) in
+    let pk_e = exp(g, x_e) in
+    let ss_x = exp(pk_x, x_e) in
+    let k = combine(ss_m, ss_x, pk_e, pk_x) in
+    out(net, (ct_m, pk_e));
+    in(net, mc: bitstring);
+    if sdec(mc, k) = sconf then
+    ( event clientConfirmed(k); out(net, senc(probe, k)) ).
+
+process
+    new sk_m: skey;                        (* server long-term ML-KEM key *)
+    new x_s: bitstring;                    (* server long-term X25519 scalar *)
+    let pk_m = kpk(sk_m) in
+    let pk_x = exp(g, x_s) in
+    out(net, pk_m); out(net, pk_x);        (* publish server public keys *)
+    ( (!server(sk_m, x_s)) | (!client(pk_m, pk_x)) )

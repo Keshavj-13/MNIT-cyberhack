@@ -104,6 +104,16 @@ DEMO_SCENARIOS: Dict[str, List[Dict[str, Any]]] = {
         {"label": "Session continues on VPN-masked, rooted device. Device trust provider: integrity compromised. BEACON warmup bypassed.", "payload": {"new_device": True, "vpn_detected": True, "rooted": True, "login_anomaly": True}, "anomaly": True},
         {"label": "High-value transfer ₹75,000 to a new external beneficiary. LURE→MONETIZE attack-chain correlation fires. Containment triggered.", "payload": {"amount": 75000, "is_new_beneficiary": True, "login_anomaly": True, "rooted": True}, "anomaly": True},
     ],
+    "mitm_intercept": [
+        {"label": "Session established over the bank's TLS channel. Fingerprint baseline enrolled: source IP + device MAC recorded. Session key v1 (HMAC-CTR-SHA256).", "payload": {}, "anomaly": False},
+        {"label": "Normal dashboard activity. IP and MAC match the enrolled baseline. No interception signal.", "payload": {}, "anomaly": False},
+        {"label": "Wireshark-style interception: traffic now transits an attacker relay. Both source IP AND device MAC change mid-session — classic man-in-the-middle. SessionFingerprint provider fires. Post-quantum X-Wing (X25519 + ML-KEM-768) key exchange forced.", "payload": {"ip_changed": True, "mac_changed": True}, "anomaly": True},
+    ],
+    "session_hijack": [
+        {"label": "Session established. Fingerprint baseline enrolled (IP + MAC/OUI). Behavioral baseline collecting.", "payload": {}, "anomaly": False},
+        {"label": "Phishing page harvests the session token. Attacker replays it from their own machine.", "payload": {"url": PHISHING_URL}, "anomaly": False},
+        {"label": "Replayed session: IP changed and MAC vendor block (OUI) no longer matches the enrolled device — spoofed hardware. Session-hijack classified. Containment + post-quantum key re-establishment.", "payload": {"ip_changed": True, "mac_changed": True, "mac_oem_mismatch": True, "url": PHISHING_URL}, "anomaly": True},
+    ],
     "full_fraud_chain": [
         {"label": "Session established by legitimate user. All six models at baseline. Session key v1 issued.", "payload": {}, "anomaly": False},
         {"label": "Phishing link clicked inside the banking session. Social-engineering score 89%. Page origin flagged as credential-harvesting domain.", "payload": {"url": PHISHING_URL}, "anomaly": False},

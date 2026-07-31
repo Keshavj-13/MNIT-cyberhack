@@ -15,7 +15,8 @@ import secrets
 
 from src.db.models import SessionLocal, init_db, TelemetryData, CustomerSession, SecurityEvent, User, OTPVerification
 from src.api.internal.session_crypto import (
-    generate_aes_key, encrypt_aes_gcm, decrypt_aes_gcm,
+    generate_aes_key, generate_sha512_session_key, generate_pqc_session_key,
+    encrypt_aes_gcm, decrypt_aes_gcm,
     create_jwt_token, verify_jwt_token, JWT_SECRETS
 )
 from src.api.internal.evaluation_runner import run_evaluation
@@ -126,12 +127,31 @@ def _escalation_reason(eval_result, action: str = "action") -> str:
 # Per-session key rotation history (in-memory; resets on restart, which is fine — admin only cares about current session)
 _KEY_ROTATION_LOG: Dict[str, list] = {}
 
+def _key_for_tier(new_risk_level: int) -> Tuple[str, str, dict]:
+    """Pick the session-key scheme for a tier. Higher tier → stronger crypto.
+
+    Post-quantum is the preferred endpoint: L4 derives its key from a real
+    X-Wing (X25519 + ML-KEM-768) handshake so a harvest-now-decrypt-later
+    adversary cannot recover it even with a quantum computer.
+    """
+    if new_risk_level >= 4:
+        key, descriptor = generate_pqc_session_key()
+        return key, descriptor.get("scheme", "X-Wing (X25519 + ML-KEM-768)"), descriptor
+    if new_risk_level == 3:
+        return generate_sha512_session_key(), "HMAC-CTR-SHA512", {
+            "scheme": "HMAC-CTR-SHA512", "note": "512-bit key, SHA-512 conditioned"}
+    return generate_aes_key(), "HMAC-CTR-SHA256", {"scheme": "HMAC-CTR-SHA256"}
+
+
 def shuffle_session_key(cust_session: CustomerSession, new_risk_level: int, db: Session,
                         reason: str = "Behavioral escalation") -> Tuple[str, int]:
     old_key = cust_session.aes_key
     old_version = cust_session.key_version
-    new_key = generate_aes_key()
+    old_scheme = cust_session.crypto_scheme or "HMAC-CTR-SHA256"
+    new_key, scheme, descriptor = _key_for_tier(new_risk_level)
     cust_session.aes_key = new_key
+    cust_session.crypto_scheme = scheme
+    cust_session.crypto_descriptor = descriptor
     cust_session.key_version += 1
     cust_session.risk_level = new_risk_level
     if new_risk_level >= 4:
@@ -148,6 +168,8 @@ def shuffle_session_key(cust_session: CustomerSession, new_risk_level: int, db: 
         "timestamp": datetime.datetime.utcnow().isoformat(),
         "old_key_prefix": old_key[:8] if old_key else None,
         "new_key_prefix": new_key[:8],
+        "from_scheme": old_scheme,
+        "to_scheme": scheme,
     })
     return new_key, cust_session.key_version
 
@@ -630,7 +652,18 @@ _USER_BENEFICIARIES: Dict[str, list] = {}
 
 def _get_beneficiaries(user_id: str) -> list:
     if user_id not in _USER_BENEFICIARIES:
-        _USER_BENEFICIARIES[user_id] = list(_DEFAULT_BENEFICIARIES)
+        # Load the user's real beneficiaries from the DB (seed_demo seeds 12);
+        # fall back to the mock defaults only if the user genuinely has none.
+        from src.db.models import SessionLocal, Beneficiary
+        db = SessionLocal()
+        try:
+            rows = db.query(Beneficiary).filter(Beneficiary.user_id == user_id).all()
+            _USER_BENEFICIARIES[user_id] = [
+                {"id": b.id, "name": b.name, "account_number": b.account_number, "bank_name": b.bank_name}
+                for b in rows
+            ] or list(_DEFAULT_BENEFICIARIES)
+        finally:
+            db.close()
     return _USER_BENEFICIARIES[user_id]
 
 @app.post("/customer/account")

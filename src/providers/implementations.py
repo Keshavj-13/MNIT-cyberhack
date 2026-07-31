@@ -271,6 +271,65 @@ class AccountTakeoverProvider(RiskProvider):
                           explanations=expl, raw_features=data)
 
 
+def _mac_oem_prefix(mac: str) -> str:
+    """First 3 octets of a MAC = the OUI (vendor block, IEEE-assigned)."""
+    parts = str(mac or "").replace("-", ":").lower().split(":")
+    return ":".join(parts[:3]) if len(parts) >= 3 else ""
+
+
+def fingerprint_flags(enrolled_ip: str, enrolled_mac: str, cur_ip: str, cur_mac: str) -> Dict[str, bool]:
+    """Compare a live session fingerprint against its enrolled baseline.
+
+    mac_oem_mismatch (vendor block changed) is the strong hijack tell: an
+    attacker spoofing a random MAC almost never lands on the victim's OUI, so a
+    changed first-3-octets is far more suspicious than a full-MAC change alone.
+    """
+    ip_changed = bool(enrolled_ip and cur_ip and enrolled_ip != cur_ip)
+    mac_changed = bool(enrolled_mac and cur_mac and enrolled_mac != cur_mac)
+    oem_mismatch = bool(mac_changed and _mac_oem_prefix(enrolled_mac) != _mac_oem_prefix(cur_mac))
+    return {"ip_changed": ip_changed, "mac_changed": mac_changed, "mac_oem_mismatch": oem_mismatch}
+
+
+class SessionFingerprintProvider(RiskProvider):
+    """MITM / session-hijack detection from IP + MAC deviation.
+
+    Reads pre-computed flags (ip_changed / mac_changed / mac_oem_mismatch) that
+    evaluation_runner injects after comparing the live request against the
+    session's enrolled baseline (CustomerSession.enrolled_ip/mac). Keeping the
+    baseline in the runner (not here) means it survives restarts and shows up in
+    the admin panel.
+    """
+    def __init__(self, *_, **__):
+        self.model_info = {"mode": "fingerprint", "model_loaded": False,
+                           "note": "Session fingerprint (IP + MAC/OUI deviation) — MITM & hijack."}
+
+    def evaluate(self, data: Dict[str, Any]) -> RiskResult:
+        ip_changed = bool(data.get("ip_changed"))
+        mac_changed = bool(data.get("mac_changed"))
+        oem_mismatch = bool(data.get("mac_oem_mismatch"))
+
+        score, expl, attack = 0.05, ["Session fingerprint baseline"], None
+        if ip_changed and mac_changed:
+            score, attack = 0.9, "MITM"
+            expl.append("IP changed AND MAC changed mid-session — man-in-the-middle interception.")
+        elif ip_changed and oem_mismatch:
+            score, attack = 0.85, "session_hijack"
+            expl.append("IP changed AND MAC vendor block (OUI) mismatch — session hijack (spoofed device).")
+        elif mac_changed and oem_mismatch:
+            score, attack = 0.6, "session_hijack"
+            expl.append("MAC vendor block (OUI) changed — device substitution.")
+        elif ip_changed:
+            score = 0.4
+            expl.append("Source IP changed mid-session — suspicious (could be VPN/mobile handoff).")
+        else:
+            expl.append("Fingerprint stable — same IP and device.")
+
+        return RiskResult(provider_name="SessionFingerprint", risk_score=score, confidence=0.92,
+                          severity="HIGH" if score >= 0.7 else ("MEDIUM" if score >= 0.4 else "LOW"),
+                          event_category="EXPLOIT" if score >= 0.5 else "NEUTRAL",
+                          explanations=expl, raw_features={"attack": attack, **data})
+
+
 class DeviceTrustProvider(RiskProvider):
     def __init__(self):
         self.model_info = {"mode": "rules", "note": "Rule-based device fingerprinting."}

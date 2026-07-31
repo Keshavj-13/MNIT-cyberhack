@@ -1,0 +1,13 @@
+{
+  "note": "Self-consistency regression lock for pure-Python ML-KEM-768. NOT FIPS 203 KAT \u2014 locks impl against accidental change. FIPS conformance requires NIST ACVP vectors (see test_mlkem_kat.py).",
+  "seed_d": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "seed_z": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+  "msg_m": "0707070707070707070707070707070707070707070707070707070707070707",
+  "ek_len": 1184,
+  "dk_len": 2400,
+  "ct_len": 1088,
+  "ek_sha256": "df339139364f1f2882645cb94fa7a1a42048caba1e34102295cc8749527cae89",
+  "dk_sha256": "2dacc378430e94e6f8f77af36c58358dd9e92e565f9967c256d10c971a2e9479",
+  "ct_sha256": "a8831fbda861afeadf514d9edffd8f4ce0b2de66e825dd5c961db62c2db35d29",
+  "shared_secret": "abeee7e3e34a23bd1b8b57e9e3ac903ac3b70ccb6f5edda414029523fc4252cd"
+}

@@ -1,0 +1,56 @@
+(*
+  X-Wing HYBRID RESILIENCE — classical half broken (ProVerif).
+
+  The reason to use a hybrid KEM at all. We model X25519 as fully compromised:
+  the attacker is HANDED the classical shared secret ss_x directly (as a quantum
+  adversary running Shor against X25519 would obtain it). We then prove the
+  derived session key is STILL secret, because it is bound to the ML-KEM shared
+  secret, which the attacker cannot obtain without the server's ML-KEM key or the
+  client's encapsulation coins.
+
+  This is the "harvest-now, decrypt-later" defence: even a future quantum break of
+  the classical curve does not expose sessions protected by the hybrid.
+
+  Run:  proverif verification/proverif/xwing_hybrid_classical_broken.pv
+  Expect: RESULT not attacker(probe) is true.
+*)
+
+free net: channel.
+type skey.  type pkey.  type ctkem.  type G.
+
+fun kpk(skey): pkey.
+fun encct(pkey, bitstring): ctkem.
+fun encss(pkey, bitstring): bitstring.
+reduc forall s: skey, r: bitstring;
+      decss(s, encct(kpk(s), r)) = encss(kpk(s), r).
+
+const g: G [data].
+fun exp(G, bitstring): G.
+equation forall x: bitstring, y: bitstring; exp(exp(g,x),y) = exp(exp(g,y),x).
+
+fun combine(bitstring, G, G, G): bitstring.
+fun senc(bitstring, bitstring): bitstring.
+reduc forall m: bitstring, k: bitstring; sdec(senc(m,k), k) = m.
+
+free probe: bitstring [private].
+query attacker(probe).
+
+let client(pk_m: pkey, pk_x: G) =
+    new r_m: bitstring;
+    new x_e: bitstring;
+    let ct_m = encct(pk_m, r_m) in
+    let ss_m = encss(pk_m, r_m) in
+    let pk_e = exp(g, x_e) in
+    let ss_x = exp(pk_x, x_e) in
+    out(net, ss_x);                          (* CLASSICAL BROKEN: leak the X25519 secret *)
+    let k = combine(ss_m, ss_x, pk_e, pk_x) in
+    out(net, (ct_m, pk_e));
+    out(net, senc(probe, k)).
+
+process
+    new sk_m: skey;
+    new x_s: bitstring;
+    let pk_m = kpk(sk_m) in
+    let pk_x = exp(g, x_s) in
+    out(net, pk_m); out(net, pk_x);
+    ( !client(pk_m, pk_x) )

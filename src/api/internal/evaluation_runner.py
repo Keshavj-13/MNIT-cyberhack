@@ -9,7 +9,8 @@ from src.engine.features import FeatureExtractor
 from src.providers.implementations import (
     TransactionRiskProvider, SocialEngineeringRiskProvider,
     AccountTakeoverProvider, DeviceTrustProvider,
-    NetworkRiskProvider, BeaconBehavioralProvider
+    NetworkRiskProvider, BeaconBehavioralProvider,
+    SessionFingerprintProvider, fingerprint_flags
 )
 
 _registry = ProviderRegistry()
@@ -19,6 +20,7 @@ _registry.register_provider(SocialEngineeringRiskProvider())
 _registry.register_provider(AccountTakeoverProvider())
 _registry.register_provider(NetworkRiskProvider())
 _registry.register_provider(DeviceTrustProvider())
+_registry.register_provider(SessionFingerprintProvider())
 _registry.register_provider(BeaconBehavioralProvider())
 
 def _category_scores(breakdown: Dict[str, Any]) -> Dict[str, float]:
@@ -82,8 +84,27 @@ def run_evaluation(payload: Dict[str, Any], db: Session) -> EngineResult:
         enriched_payload["session_prior_risk"] = (current_session.risk_level - 1) * 0.25  # L2→+0.25, L3→+0.50
         enriched_payload["session_risk_level"] = current_session.risk_level
 
+    # Session-fingerprint flags for MITM/hijack detection. If the caller (attacker
+    # sim) already supplied ip_changed/mac_changed, respect those; otherwise
+    # compare the live IP/MAC against the session's enrolled baseline.
+    cur_ip = payload.get("client_ip") or payload.get("ip")
+    cur_mac = payload.get("device_mac") or payload.get("mac")
+    if not any(k in payload for k in ("ip_changed", "mac_changed", "mac_oem_mismatch")):
+        if current_session and (cur_ip or cur_mac):
+            if not current_session.enrolled_ip and not current_session.enrolled_mac:
+                current_session.enrolled_ip = cur_ip          # first sight → enroll baseline
+                current_session.enrolled_mac = cur_mac
+                db.commit()
+            else:
+                flags = fingerprint_flags(current_session.enrolled_ip, current_session.enrolled_mac, cur_ip, cur_mac)
+                enriched_payload.update(flags)
+
     engine = RiskEngine(_registry.get_providers())
     result = engine.evaluate_all(enriched_payload, history)
+
+    # Concept-bottleneck reasoning layer — human-readable attack attribution
+    from src.explainability.concept_bottleneck import build_reasoning
+    reasoning = build_reasoning(result, enriched_payload)
 
     # 4. Determine Dominant Category for this event
     dominant_cat = "NEUTRAL"
@@ -114,7 +135,8 @@ def run_evaluation(payload: Dict[str, Any], db: Session) -> EngineResult:
         decision=result.decision,
         escalation_level=result.escalation_level,
         confidence=result.confidence,
-        breakdown={k: v.dict() for k, v in result.provider_breakdown.items()},
+        breakdown={**{k: v.dict() for k, v in result.provider_breakdown.items()},
+                   "beacon_reasoning": reasoning},
         recommendation=result.recommendation,
         why_decision=why_desc
     )

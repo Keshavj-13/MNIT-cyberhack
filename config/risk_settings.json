@@ -8,6 +8,7 @@
     "AccountTakeoverProvider": 0.05,
     "NetworkRiskProvider": 0.05,
     "DeviceTrustProvider": 0.10,
+    "SessionFingerprintProvider": 0.10,
     "BeaconBehavioralProvider": 0.20
   }
 }

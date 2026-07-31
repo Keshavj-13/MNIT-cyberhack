@@ -134,7 +134,21 @@ class RiskEngine:
 
         # 5. Stateful Correlation (Attack Chain Multipliers)
         final_score, correlation_expl = self._apply_correlation(weighted_score, results, history)
-        
+
+        # 5b. A confirmed man-in-the-middle interception or session hijack must
+        # escalate regardless of weight dilution — with only ~0.05 weight, the
+        # SessionFingerprint provider's 0.9 MITM score would otherwise be
+        # averaged down to ~0.04 and never trip containment. Interception is not
+        # something to average away against six benign providers. Scoped to this
+        # one provider so tuned multi-step scenarios keep their gradual buildup.
+        fp = results.get("SessionFingerprintProvider")
+        if fp and fp.event_category == "EXPLOIT" and fp.risk_score >= 0.85:
+            floored = fp.risk_score * 0.9
+            if floored > final_score:
+                final_score = floored
+                correlation_expl = (f"Decisive signal: session fingerprint "
+                                    f"({fp.risk_score:.2f}) forces escalation. " + correlation_expl).strip()
+
         # 6. Final Decision Logic
         summary_expl = f"Primary risk factor: {primary_driver} (Impact: {primary_impact:.2f})."
         if correlation_expl:

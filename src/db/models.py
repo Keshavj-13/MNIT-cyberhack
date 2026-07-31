@@ -63,12 +63,18 @@ class CustomerSession(Base):
     
     session_id = Column(String, primary_key=True, index=True)
     user_id = Column(String, index=True)
-    aes_key = Column(String)  # Base64 encoded AES-256 key
+    aes_key = Column(String)  # Base64 encoded session key (scheme depends on crypto_scheme)
     risk_level = Column(Integer, default=1)
     key_version = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     is_active = Column(Boolean, default=True)
+    # Crypto scheme escalates with risk tier: HMAC-CTR-SHA256 → SHA512 → X-Wing/ML-KEM-768
+    crypto_scheme = Column(String, default="HMAC-CTR-SHA256")
+    crypto_descriptor = Column(SafeJSON, nullable=True)   # PQC handshake artifacts for admin display
+    # Session fingerprint baseline — set on first telemetry, compared thereafter (MITM/hijack)
+    enrolled_ip = Column(String, nullable=True)
+    enrolled_mac = Column(String, nullable=True)
 
 class User(Base):
     __tablename__ = "users"
@@ -162,6 +168,12 @@ def _migrate_schema():
         "otp_verifications": {
             # Older DBs created before purpose was added get "registration" as default
             "purpose": "ALTER TABLE otp_verifications ADD COLUMN purpose VARCHAR DEFAULT 'registration'",
+        },
+        "customer_sessions": {
+            "crypto_scheme": "ALTER TABLE customer_sessions ADD COLUMN crypto_scheme VARCHAR DEFAULT 'HMAC-CTR-SHA256'",
+            "crypto_descriptor": "ALTER TABLE customer_sessions ADD COLUMN crypto_descriptor JSON",
+            "enrolled_ip": "ALTER TABLE customer_sessions ADD COLUMN enrolled_ip VARCHAR",
+            "enrolled_mac": "ALTER TABLE customer_sessions ADD COLUMN enrolled_mac VARCHAR",
         },
     }
     with engine.connect() as conn:

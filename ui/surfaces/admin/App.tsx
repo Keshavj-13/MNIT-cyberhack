@@ -590,6 +590,39 @@ export default function App() {
                         <p className="text-sm text-slate-700 leading-relaxed">{selectedEvent.why_decision}</p>
                       </div>
 
+                      {/* Concept-bottleneck attribution — the human-readable class + evidence chain */}
+                      {selectedEvent.breakdown?.beacon_reasoning && (() => {
+                        const r = selectedEvent.breakdown.beacon_reasoning;
+                        const STYLE: Record<string, string> = {
+                          clean: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+                          phishing: 'bg-amber-50 border-amber-200 text-amber-800',
+                          behavioral_anomaly: 'bg-amber-50 border-amber-200 text-amber-800',
+                          MITM: 'bg-red-50 border-red-200 text-red-800',
+                          session_hijack: 'bg-red-50 border-red-200 text-red-800',
+                        };
+                        const cls = STYLE[r.attack_type] || 'bg-slate-50 border-slate-200 text-slate-800';
+                        const label = (r.attack_type || 'clean').replace('_',' ').toUpperCase();
+                        return (
+                          <div className={`border rounded-xl p-4 ${cls}`}>
+                            <div className="flex items-center gap-2 flex-wrap mb-2">
+                              <span className="text-xs font-bold uppercase tracking-widest">Attribution</span>
+                              <span className="px-2 py-0.5 rounded-md bg-white/70 border border-black/10 text-sm font-bold">{label}</span>
+                              <span className="text-xs font-mono opacity-80">confidence {Math.round((r.confidence||0)*100)}%</span>
+                              <span className="ml-auto text-xs font-mono opacity-80">Tier {r.tier_response} · {r.crypto_action}</span>
+                            </div>
+                            {(r.triggered_concepts || []).length > 0 && (
+                              <ul className="space-y-1 mt-2">
+                                {r.triggered_concepts.map((c: string, i: number) => (
+                                  <li key={i} className="text-sm font-mono leading-snug flex gap-2">
+                                    <span className="opacity-50">›</span><span>{c}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       {/* Behavioral Evidence — what AURA actually detected */}
                       {(() => {
                         const bd = selectedEvent.breakdown || {};
@@ -674,7 +707,7 @@ export default function App() {
                             <Cpu size={12} className="text-slate-400" /> ML Provider Scores · {Object.keys(selectedEvent.breakdown||{}).length} models
                           </h3>
                           <div className="bg-white border border-slate-200 rounded-xl px-4 pb-2 shadow-sm">
-                            {Object.entries(selectedEvent.breakdown || {}).map(([name, data]: [string, any]) => (
+                            {Object.entries(selectedEvent.breakdown || {}).filter(([name]) => name !== 'beacon_reasoning').map(([name, data]: [string, any]) => (
                               <ProviderRow key={name} name={name} data={data} weight={config?.weights?.[name]} />
                             ))}
                             {Object.keys(selectedEvent.breakdown || {}).length === 0 && (
@@ -1319,13 +1352,17 @@ export default function App() {
                                     </div>
                                   )}
                                   <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500">Cipher</span>
-                                    <span className="text-slate-700 font-semibold text-xs">
-                                      {(liveData.session.risk_level || 1) >= 4 ? 'PQC Recovery' :
-                                       (liveData.session.risk_level || 1) >= 3 ? 'AES-256 + Key Rotation' :
-                                       (liveData.session.risk_level || 1) >= 2 ? 'AES-256 + OTP' : 'AES-256'}
+                                    <span className="text-slate-500">Key scheme</span>
+                                    <span className="text-slate-700 font-semibold text-xs text-right">
+                                      {liveData.session.crypto_scheme || 'HMAC-CTR-SHA256'}
                                     </span>
                                   </div>
+                                  {liveData.session.crypto_descriptor?.mlkem_ct_prefix && (
+                                    <div className="flex justify-between text-sm">
+                                      <span className="text-slate-500">ML-KEM ct</span>
+                                      <span className="text-slate-500 font-mono text-xs">{liveData.session.crypto_descriptor.mlkem_ct_prefix}…</span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -1333,7 +1370,7 @@ export default function App() {
                             {/* Provider bars */}
                             {liveData.latest_event && (
                               <div className="space-y-3">
-                                {Object.entries(liveData.latest_event.breakdown || {}).map(([name, res]: [string, any]) => {
+                                {Object.entries(liveData.latest_event.breakdown || {}).filter(([name]) => name !== 'beacon_reasoning').map(([name, res]: [string, any]) => {
                                   const short = PROVIDER_META[name]?.short || name.replace('Provider','').replace('Risk','');
                                   const pct = Math.round((res.risk_score||0)*100);
                                   const bar = pct>=60?'bg-red-500':pct>=30?'bg-amber-400':'bg-emerald-500';

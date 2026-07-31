@@ -1,0 +1,29 @@
+(*
+  X-Wing computational-model proof — TEMPLATE / POINTER, not a runnable model.
+
+  ProVerif (verification/proverif/*.pv) proves the handshake in the SYMBOLIC
+  model: it treats ML-KEM and X25519 as perfect black boxes. CryptoVerif proves
+  security in the COMPUTATIONAL model instead — a sequence of game hops that
+  bounds the adversary's advantage by reductions to the underlying hardness
+  assumptions (IND-CCA of ML-KEM, Gap-DH of X25519). That is strictly stronger.
+
+  We do NOT re-derive it here because X-Wing already has a published, peer-
+  reviewed computational proof of its combiner:
+
+    Barbosa, Connolly, Duarte, Kaiser, Schwabe, Varner, Westerbaan,
+    "X-Wing: The Hybrid KEM You've Been Looking For", IACR CiC 2024/1.
+    Theorem: X-Wing is IND-CCA secure if ML-KEM-768 is IND-CCA secure and
+    X25519 satisfies the Gap-DH assumption (in the ROM/QROM for SHA3-256).
+
+  To reproduce the combiner game locally once CryptoVerif is installed:
+    1. Model the two KEMs with CryptoVerif's `Kem` / DH primitive libraries.
+    2. Model `combine = SHA3-256(label || ss_m || ss_x || ct_x || pk_x)` as a
+       random oracle (ROM).
+    3. Assert `Secrecy(K)` and run: cryptoverif xwing.ocv
+       -> expect "RESULT Proved secrecy of K".
+
+  Rationale for pointing rather than re-proving: a hand-rolled computational
+  proof that disagrees with the published one would be a liability, not an asset.
+  The citation IS the verification at this layer; this file records how to
+  reproduce it if required.
+*)

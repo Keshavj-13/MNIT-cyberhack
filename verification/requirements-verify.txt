@@ -1,0 +1,8 @@
+# Verification-suite dependencies (in addition to the app's own requirements).
+# The Python-native layers (SMT proofs, property tests, KAT, EWC stats, e2e,
+# fuzz, escalation shadow) run with just these. The external formal tools
+# (ProVerif, TLA+/TLC) are separate toolchains — see README.md.
+pytest>=8.0
+z3-solver>=4.12
+hypothesis>=6.100
+scipy>=1.11        # already an app dep; listed for completeness

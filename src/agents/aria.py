@@ -93,14 +93,23 @@ def _generate_grounded_fallback(events) -> str:
     if chain_parts:
         lines.append("Kill chain: " + " → ".join(chain_parts))
 
-    # Cryptographic consequence
+    # Concept-bottleneck attribution — the human-readable "why" behind the class
+    reasoning = (final.breakdown or {}).get("beacon_reasoning") if isinstance(final.breakdown, dict) else None
+    if reasoning:
+        lines.append(f"Attribution: {reasoning.get('attack_type', 'unknown').replace('_', ' ').upper()} "
+                     f"(confidence {reasoning.get('confidence', 0):.0%}).")
+        for c in reasoning.get("triggered_concepts", [])[:4]:
+            lines.append(f"  • {c}")
+
+    # Cryptographic consequence — scheme escalates with tier (post-quantum at L4)
     lines.append(f"Cryptographic response: L{final.escalation_level} {final.decision}.")
     if final.escalation_level >= 4:
-        lines.append("Session deactivated (is_active=False). AES-256 key rotated to v4. Recovery card challenge required.")
+        lines.append("Session contained (is_active=False). Session key re-established via post-quantum "
+                     "X-Wing (X25519 + ML-KEM-768). OTP + recovery-card challenge required.")
     elif final.escalation_level == 3:
-        lines.append("Sensitive ops locked. AES-256 key rotated. OTP + password reset required.")
+        lines.append("Sensitive ops locked. Session key upgraded to HMAC-CTR-SHA512. OTP + password reset required.")
     elif final.escalation_level == 2:
-        lines.append("OTP challenge issued. AES-256 key rotated to elevated tier.")
+        lines.append("OTP challenge issued. Session key rotated (HMAC-CTR-SHA256).")
 
     return "\n".join(lines)
 

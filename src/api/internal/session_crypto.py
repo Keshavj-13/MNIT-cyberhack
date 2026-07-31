@@ -28,6 +28,37 @@ def generate_aes_key() -> str:
     """Generate a random 256-bit symmetric key and return as base64 string."""
     return base64.b64encode(secrets.token_bytes(32)).decode('utf-8')
 
+
+def generate_sha512_session_key() -> str:
+    """Tier-3 key: 512-bit key material, SHA-512-conditioned. Base64 string.
+
+    The wire AEAD stays HMAC-CTR (see encrypt_aes_gcm) — this doubles the key
+    length and runs it through SHA-512 so the L3 session key can't be related to
+    the L2 key by anyone who saw the earlier rotation.
+    """
+    raw = secrets.token_bytes(64)
+    conditioned = hashlib.sha512(raw + secrets.token_bytes(16)).digest()
+    return base64.b64encode(conditioned).decode('utf-8')
+
+
+def generate_pqc_session_key() -> tuple:
+    """Tier-4 key: derived from a real X-Wing (X25519 + ML-KEM-768) handshake.
+
+    Returns (key_b64, descriptor_dict). The key material is the post-quantum
+    shared secret expanded to 64 bytes; the descriptor carries the (truncated)
+    public handshake artifacts for the admin panel. Private keys never leave
+    pqcrypto. Falls back to SHA-512 material only if the PQC module is somehow
+    unavailable, so escalation never hard-fails.
+    """
+    try:
+        from src.api.internal.pqcrypto import establish_xwing_key
+        key, descriptor = establish_xwing_key(64)
+        return base64.b64encode(key).decode('utf-8'), descriptor
+    except Exception as e:
+        return generate_sha512_session_key(), {
+            "scheme": "SHA-512 (PQC unavailable)", "error": str(e),
+        }
+
 def _xor_bytes(a: bytes, b: bytes) -> bytes:
     return bytes(x ^ y for x, y in zip(a, b))
 

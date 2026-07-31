@@ -219,6 +219,12 @@ def get_session_live(session_id: str, db: Session = Depends(get_db), admin = Dep
             "last_rotation_reason": last_rot["reason"] if last_rot else None,
             "last_rotation_at": last_rot["timestamp"] if last_rot else None,
             "rotation_log": rot_log,
+            # Crypto scheme + PQC handshake artifacts (escalates with tier)
+            "crypto_scheme": getattr(sess, "crypto_scheme", None) or "HMAC-CTR-SHA256",
+            "crypto_descriptor": getattr(sess, "crypto_descriptor", None),
+            # Session fingerprint baseline (MITM/hijack reference)
+            "enrolled_ip": getattr(sess, "enrolled_ip", None),
+            "enrolled_mac": getattr(sess, "enrolled_mac", None),
         },
         "telemetry": telemetry,
         "telemetry_count": len(telemetry),
@@ -273,6 +279,33 @@ def update_config(payload: Dict[str, Any] = Body(...), admin = Depends(get_curre
         return {"status": "success", "message": "Risk engine configuration updated."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update configuration: {str(e)}")
+
+
+@app.post("/admin/retrain")
+def retrain_models(payload: Dict[str, Any] = Body(default={}), admin = Depends(get_current_admin), db: Session = Depends(get_db)):
+    """Run one EWC continual-learning cycle over the last 7 days of events.
+
+    Trains the fusion head on this week's data both with and without the Fisher
+    penalty and reports how much each forgets prior attack patterns — the core
+    'why EWC' evidence for the admin panel.
+    """
+    import datetime as _dt
+    from src.training.continual_learner import run_weekly_retrain, RETRAIN_HISTORY
+    lam = float(payload.get("lambda", 50.0))
+    cutoff = _dt.datetime.utcnow() - _dt.timedelta(days=7)
+    events = db.query(SecurityEvent).filter(SecurityEvent.timestamp >= cutoff).all()
+    result = run_weekly_retrain(events, lam=lam)
+    result["ran_at"] = _dt.datetime.utcnow().isoformat()
+    result["events_considered"] = len(events)
+    RETRAIN_HISTORY.append(result)
+    return result
+
+
+@app.get("/admin/retrain/history")
+def retrain_history(admin = Depends(get_current_admin)):
+    """Last 10 EWC retrain runs (in-memory; resets on restart)."""
+    from src.training.continual_learner import RETRAIN_HISTORY
+    return {"runs": RETRAIN_HISTORY[-10:], "count": len(RETRAIN_HISTORY)}
 
 def generate_biometric_visuals(event, db: Session):
     # 1. Real Timing Sequence
