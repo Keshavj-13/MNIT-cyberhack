@@ -1,0 +1,18 @@
+{
+  "customerState": {
+    "aesKey": "jZcpPALtfByzXDl+uPChs6ZsoSc4LSFkMXhL4te9IcU=",
+    "keyVersion": 3,
+    "sessionId": "cust_sess_54493f6371da01e6",
+    "riskLevel": 3
+  },
+  "adminObservedState": {
+    "session_id": "cust_sess_54493f6371da01e6",
+    "user_id": "demo_keshav",
+    "risk_level": 4,
+    "key_version": 4,
+    "aes_key": "/XVColBDmg9Z...",
+    "created_at": "2026-06-30T11:49:55.094363",
+    "updated_at": "2026-06-30T11:50:07.298177",
+    "is_active": false
+  }
+}
